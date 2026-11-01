@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.peaspilaf.copyparty.core.AppState
@@ -29,7 +30,13 @@ import com.peaspilaf.copyparty.server.ServerStatus
  * configuration that cannot work says why before the server is started.
  */
 @Composable
-internal fun HomeScreen(viewModel: AppViewModel, state: AppState) {
+internal fun HomeScreen(
+    viewModel: AppViewModel,
+    state: AppState,
+    onOpenBrowser: (String) -> Unit = {},
+    onShowQr: (String) -> Unit = {},
+) {
+    val context = LocalContext.current
     val status by viewModel.serverStatus.collectAsState()
     val current = status
 
@@ -137,6 +144,33 @@ internal fun HomeScreen(viewModel: AppViewModel, state: AppState) {
                 ) {
                     Text("Stop server")
                 }
+            }
+        }
+
+        val runningUrl = (current as? ServerStatus.Running)?.urls?.firstOrNull()
+        if (runningUrl != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Button(
+                    onClick = { onOpenBrowser(runningUrl) },
+                    modifier = Modifier.weight(1f).testTag(Tags.OpenBrowser),
+                ) {
+                    Text("Open in app")
+                }
+                OutlinedButton(
+                    onClick = { onShowQr(runningUrl) },
+                    modifier = Modifier.weight(1f).testTag(Tags.ShowQr),
+                ) {
+                    Text("QR code")
+                }
+            }
+            OutlinedButton(
+                onClick = { copyAddress(context, runningUrl) },
+                modifier = Modifier.fillMaxWidth().testTag(Tags.CopyUrl),
+            ) {
+                Text("Copy link")
             }
         }
 

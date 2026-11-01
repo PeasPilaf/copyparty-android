@@ -137,6 +137,30 @@ object UiTags {
     /** Deletes the person through `AppViewModel.deleteUser`, which also strips their grants. */
     fun deletePerson(name: String): String = "delete-person-$name"
 
+    // -- Connect: in-app browser and QR code ---------------------------------------------------
+
+    /** Opens the real copyparty web UI in the in-app browser. */
+    const val OpenBrowser = "open-browser"
+
+    /** Opens the full-screen QR code for the running address. */
+    const val ShowQr = "show-qr"
+
+    /** Copies the running address to the clipboard. */
+    const val CopyUrl = "copy-url"
+
+    const val ScreenQr = "screen-qr"
+    const val QrBack = "qr-back"
+    const val QrImage = "qr-image"
+    const val QrUrl = "qr-url"
+    const val QrCopy = "qr-copy"
+
+    const val BrowserChrome = "browser-chrome"
+    const val BrowserWebView = "browser-webview"
+    const val BrowserBack = "browser-back"
+    const val BrowserUrl = "browser-url"
+    const val BrowserReload = "browser-reload"
+    const val BrowserExternal = "browser-external"
+
     // -- Settings -----------------------------------------------------------------------------
 
     /** The port input field. */

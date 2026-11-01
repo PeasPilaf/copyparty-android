@@ -54,6 +54,22 @@ internal object Tags {
     const val PersonPasswordField = "person-password-field"
     const val PersonSave = "person-save"
 
+    // Connect: in-app browser and QR code
+    const val OpenBrowser = "open-browser"
+    const val ShowQr = "show-qr"
+    const val CopyUrl = "copy-url"
+    const val ScreenQr = "screen-qr"
+    const val QrBack = "qr-back"
+    const val QrImage = "qr-image"
+    const val QrUrl = "qr-url"
+    const val QrCopy = "qr-copy"
+    const val BrowserChrome = "browser-chrome"
+    const val BrowserWebView = "browser-webview"
+    const val BrowserBack = "browser-back"
+    const val BrowserUrl = "browser-url"
+    const val BrowserReload = "browser-reload"
+    const val BrowserExternal = "browser-external"
+
     // Settings
     const val SettingsPort = "settings-port"
     const val SettingsLanAccess = "settings-lan-access"

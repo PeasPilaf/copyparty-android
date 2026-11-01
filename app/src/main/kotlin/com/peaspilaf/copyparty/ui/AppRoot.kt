@@ -35,6 +35,19 @@ fun AppRoot(viewModel: AppViewModel) {
     val state by viewModel.state.collectAsState()
     var tab by remember { mutableStateOf(AppTab.Home) }
     var sharesRoute by remember { mutableStateOf<SharesRoute>(SharesRoute.ShowList) }
+    var connection by remember { mutableStateOf<ConnectionRoute?>(null) }
+
+    when (val route = connection) {
+        is ConnectionRoute.Browser -> {
+            BrowserScreen(url = route.url, onBack = { connection = null })
+            return
+        }
+        is ConnectionRoute.Qr -> {
+            QrScreen(url = route.url, onBack = { connection = null })
+            return
+        }
+        null -> Unit
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -54,7 +67,12 @@ fun AppRoot(viewModel: AppViewModel) {
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                AppTab.Home -> HomeScreen(viewModel, state)
+                AppTab.Home -> HomeScreen(
+                    viewModel = viewModel,
+                    state = state,
+                    onOpenBrowser = { connection = ConnectionRoute.Browser(it) },
+                    onShowQr = { connection = ConnectionRoute.Qr(it) },
+                )
                 AppTab.Shares -> when (val route = sharesRoute) {
                     SharesRoute.ShowList -> SharesScreen(
                         shares = state.shares,
@@ -93,6 +111,12 @@ private enum class AppTab(
     Shares("Shares", Tags.NavShares, Icons.Filled.Folder),
     People("People", Tags.NavPeople, Icons.Filled.Person),
     Settings("Settings", Tags.NavSettings, Icons.Filled.Settings),
+}
+
+/** Full-screen connection screens that sit above the tab shell. */
+private sealed interface ConnectionRoute {
+    data class Browser(val url: String) : ConnectionRoute
+    data class Qr(val url: String) : ConnectionRoute
 }
 
 /** Where the Shares tab is: the list, the folder picker, or one share's editor. */
