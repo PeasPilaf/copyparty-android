@@ -14,6 +14,10 @@ import time
 import urllib.error
 import urllib.request
 
+# Importing the app's Python tree must not leave __pycache__ next to the sources that Chaquopy
+# packages into the APK.
+sys.dont_write_bytecode = True
+
 PORT = 39601
 TIMEOUT_S = 60.0
 

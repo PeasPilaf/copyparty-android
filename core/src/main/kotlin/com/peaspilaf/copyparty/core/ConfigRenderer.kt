@@ -67,7 +67,12 @@ object ConfigRenderer {
             out.append('\n')
         }
 
-        return out.toString().trimEnd() + "\n"
+        // End the file with exactly one newline. Only newlines are trimmed, so a trailing space that
+        // belongs to the last value is not silently removed: the renderer reproduces the state it is
+        // given instead of "fixing" it. (copyparty trims config values when it parses them, so a
+        // folder whose name really ends in a space has to be rejected earlier by the Validator --
+        // the renderer must not hide that by rewriting the value.)
+        return out.toString().trimEnd('\n') + "\n"
     }
 
     /** `photos` -> `/photos`; copyparty mounts volumes by web path. */

@@ -14,8 +14,11 @@ permissions:
   contents: read
 
 env:
-  # One place to bump the embedded copyparty version; the contract job installs the same version.
+  # One place to bump the embedded copyparty version; the contract job installs the same version and
+  # scripts/check_readme_contract.py keeps the README in sync with it.
   COPYPARTY_VERSION: "1.20.26"
+  # Chaquopy needs a build-machine Python whose major.minor matches the app's Python (3.12).
+  PYTHON_VERSION: "3.12"
 
 jobs:
   android:
@@ -30,11 +33,11 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # Chaquopy needs a build-machine Python whose major.minor matches the app's Python (3.12).
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_VERSION }}
 
+      # Caches the Gradle user home (dependencies, wrapper, build cache) between runs.
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Make the wrapper executable
@@ -45,6 +48,12 @@ jobs:
 
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
+
+      # The release variant is what people install, so every CI run builds it too instead of letting
+      # the release path rot between tags. Without keystore secrets app/build.gradle.kts falls back to
+      # the debug signing config, so this needs no secrets and still produces an installable APK.
+      - name: Assemble release APK (debug-signed when no keystore secrets)
+        run: ./gradlew :app:assembleRelease --stacktrace
 
       - name: Lint
         run: ./gradlew :app:lintDebug --stacktrace
@@ -65,6 +74,15 @@ jobs:
         with:
           name: copyparty-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload release smoke APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: copyparty-release-smoke-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
           retention-days: 14
 
   config-contract:
@@ -81,12 +99,27 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # The copyparty wheel is the slow part of this job; cache it separately from Gradle.
+      - name: Cache the copyparty wheel
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ env.COPYPARTY_VERSION }}
+
       - name: Make the wrapper executable
         run: chmod +x gradlew
+
+      # The workflow and the README are production files in a CI-only project: this fails if a job
+      # loses its timeout/cache/artifact, if the release build stops being exercised, or if the
+      # README drifts from the versions, tasks and job names above.
+      - name: Docs and workflow contract (README, ci.yml and release.yml agree)
+        run: |
+          python3 scripts/check_ci_contract.py
+          python3 scripts/check_readme_contract.py
 
       - name: Install copyparty (same version as the app embeds)
         run: python3 -m pip install --disable-pip-version-check "copyparty==${COPYPARTY_VERSION}"
@@ -118,6 +151,7 @@ jobs:
         with:
           name: config-contract
           path: ${{ runner.temp }}/copyparty-contract
+          if-no-files-found: warn
           retention-days: 7
 
   instrumented:
@@ -134,7 +168,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - uses: gradle/actions/setup-gradle@v4
 

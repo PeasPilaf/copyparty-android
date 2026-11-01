@@ -12,8 +12,10 @@ object LocalUrls {
             .filter { nic -> nic.isUp && !nic.isLoopback }
             .flatMap { nic -> Collections.list(nic.inetAddresses) }
             .filterIsInstance<Inet4Address>()
+            // The interface check above is not enough on every platform: filter the addresses
+            // themselves so a loopback or link-local address can never be offered to a client.
+            .filterNot { it.isLoopbackAddress || it.isLinkLocalAddress }
             .mapNotNull { it.hostAddress }
-            .filterNot { it.startsWith("169.254.") }
             .distinct()
     }
 

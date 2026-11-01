@@ -32,7 +32,11 @@ interface StorageAccess {
 class AndroidStorageAccess(private val context: Context) : StorageAccess {
     override fun hasAllFilesAccess(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return true
-        return Environment.isExternalStorageManager()
+        // The platform cannot always answer this question: during early boot the storage user may
+        // not exist yet, and a plain JVM test host has no platform user at all. Not being able to
+        // ask is not permission: fall back to the app's private share folder instead of crashing
+        // the folder picker.
+        return runCatching { Environment.isExternalStorageManager() }.getOrDefault(false)
     }
 
     override fun allFilesAccessIntent(): Intent =
@@ -45,7 +49,8 @@ class AndroidStorageAccess(private val context: Context) : StorageAccess {
         add(appShareRoot())
         if (hasAllFilesAccess()) {
             @Suppress("DEPRECATION")
-            Environment.getExternalStorageDirectory()?.let { add(it) }
+            val sharedStorage = runCatching { Environment.getExternalStorageDirectory() }.getOrNull()
+            if (sharedStorage != null) add(sharedStorage)
         }
     }
 }

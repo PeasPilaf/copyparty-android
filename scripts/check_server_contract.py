@@ -5,8 +5,8 @@ Usage: check_server_contract.py <workdir>
 
 <workdir> must contain state.json (written by make_contract_state.py) and copyparty.conf (written by
 the app's Kotlin renderer through its CLI). Every check maps to a promise the app makes to its user:
-public folders are readable, private folders are not, and the permissions the UI exposes actually
-work over HTTP/WebDAV.
+public folders are readable, private folders are not, a folder nobody was granted is invisible, and
+the permissions the UI exposes actually work over HTTP/WebDAV.
 """
 import json
 import os
@@ -72,8 +72,18 @@ def main() -> int:
             print(f"copyparty did not listen on port {port}", file=sys.stderr)
             return 1
 
-        status, body = request(base + "/")
-        check("volume list is served at /", status == 200 and "public" in body, f"status={status}")
+        status, root_body = request(base + "/")
+        check("volume list is served at /", status == 200 and "public" in root_body, f"status={status}")
+        check(
+            "a private volume is absent from the anonymous volume list",
+            "/private/" not in root_body,
+            f"status={status} body={root_body!r}",
+        )
+        check(
+            "a volume with no grants is absent from the volume list",
+            "/nogrant/" not in root_body,
+            f"status={status} body={root_body!r}",
+        )
 
         status, body = request(base + "/public/")
         check("public folder lists its files", status == 200 and "hello.txt" in body, f"status={status}")
@@ -86,6 +96,21 @@ def main() -> int:
 
         status, body = request(base + "/private/?pw=hunter2")
         check("private folder opens with the password", status == 200 and "secret.txt" in body, f"status={status}")
+
+        status, account_body = request(base + "/?pw=hunter2")
+        check(
+            "an account sees its private volume in the volume list",
+            status == 200 and "/private/" in account_body,
+            f"status={status} body={account_body!r}",
+        )
+        check(
+            "a volume with no grants stays absent for an authenticated account",
+            "/nogrant/" not in account_body,
+            f"status={status} body={account_body!r}",
+        )
+
+        status, _ = request(base + "/nogrant/")
+        check("a folder nobody was granted is not served", status in (401, 403), f"status={status}")
 
         status, _ = request(base + "/private/put-by-anon.txt", method="PUT", data=b"nope")
         check("anonymous upload is denied", status in (401, 403), f"status={status}")
