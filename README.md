@@ -12,7 +12,8 @@ This repo packages copyparty as an ordinary Android app:
 * **Fine-grained folder sharing.** Pick any folder, give it a link, then choose exactly who may see,
   download, upload, move, delete or administer it. Anonymous access is a checkbox, not a config file.
 * **Desktop power, phone UI.** Browsing, uploading and downloading happens in the real copyparty web
-  UI inside the app. Everything else (accounts, permissions, server settings) is native Compose.
+  UI inside the app. Accounts, permissions, server settings, the in-app browser and the QR code that
+  gets another device onto the server are native Compose.
 * **Deliberately small.** Only the parts of copyparty that make sense on a phone are exposed. No FTP,
   no SFTP, no SMB, no TFTP, no TLS certificate management, no zeroconf.
 
@@ -31,12 +32,23 @@ This repo packages copyparty as an ordinary Android app:
         ▲ LAN clients (phone, laptop, TV) browse over HTTP/WebDAV
 ```
 
+## What the app does
+
+| Screen | What it is for |
+| --- | --- |
+| Home | Start/stop the server, see its address, open the in-app browser, show the QR code, copy the link, and see why the setup cannot start if it cannot |
+| Shares | Every shared folder with its link, who can open it, and an on/off switch |
+| Share editor | Pick a folder, then tick exactly what each person (or anyone on the network) may do: view, download, upload, move, delete, administer |
+| People | Accounts and passwords (generated for you) that the share ACLs refer to |
+| Settings | Port, LAN-only vs all interfaces, start on boot, server name, theme, and the last lines of the server log for diagnostics |
+| Browser | The real copyparty web UI in a WebView, with back/reload/open-in-Chrome |
+
 ## Project status
 
-The server lifecycle, the config renderer/validator, the persistence layer and the CI contracts
-described below exist and are wired into the workflows. The account, share and settings screens are
-being built in parallel. This README describes the target behaviour; wherever it says a check asserts
-something, that promise is enforced by a script or a workflow job.
+Everything described here exists, and the promises are enforced by CI: unit and Robolectric tests,
+a contract job that feeds the app's rendered config to real copyparty, and an emulator job that boots
+the embedded CPython + copyparty inside the Android app process. The README is itself checked by
+`scripts/check_readme_contract.py` so it cannot claim a job, task or permission that does not exist.
 
 ## Sharing model
 

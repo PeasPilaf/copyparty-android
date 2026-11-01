@@ -18,11 +18,10 @@ object QrCode {
 
     /** The raw module matrix, kept separate from [bitmap] so it can be asserted in a plain JVM test. */
     fun matrix(text: String, size: Int = 512): BitMatrix {
-        val hints = mapOf(
-            EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
-            EncodeHintType.MARGIN to QUIET_ZONE_MODULES,
-            EncodeHintType.CHARACTER_SET to "UTF-8",
-        )
+        val hints = HashMap<EncodeHintType, Any>()
+        hints[EncodeHintType.ERROR_CORRECTION] = ErrorCorrectionLevel.M
+        hints[EncodeHintType.MARGIN] = QUIET_ZONE_MODULES
+        hints[EncodeHintType.CHARACTER_SET] = "UTF-8"
         return QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, hints)
     }
 
