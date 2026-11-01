@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Copyparty</string>
+    <string name="notification_channel_server">File server</string>
+    <string name="notification_channel_server_description">Ongoing notification while the file server is running</string>
+    <string name="notification_server_running">Copyparty is running</string>
+    <string name="notification_server_starting">Starting Copyparty\u2026</string>
+    <string name="notification_server_failed">Copyparty could not start</string>
+    <string name="notification_action_stop">Stop</string>
+</resources>

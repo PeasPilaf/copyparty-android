@@ -1,0 +1,24 @@
+Copyparty for Android bundles third-party software.
+
+copyparty (https://github.com/9001/copyparty)
+  License: MIT
+  Installed into the APK at build time as the Python package "copyparty" (pinned in app/build.gradle.kts).
+
+Chaquopy (https://chaquo.com/chaquopy/)
+  License: MIT
+  Embedded CPython interpreter and Gradle plugin.
+
+Jinja2 (https://palletsprojects.com/projects/jinja/)
+  License: BSD-3-Clause
+  Required by copyparty for its HTML rendering.
+
+MarkupSafe (https://palletsprojects.com/projects/markupsafe/)
+  License: BSD-3-Clause
+  Transitive dependency of Jinja2.
+
+ZXing core (https://github.com/zxing/zxing)
+  License: Apache-2.0
+  QR code generation for the server address.
+
+AndroidX / Jetpack Compose / Kotlin / kotlinx.serialization
+  Licenses: Apache-2.0 (AndroidX, Kotlin), Apache-2.0 (kotlinx.serialization)
