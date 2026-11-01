@@ -69,7 +69,7 @@ class ServerService : Service() {
         ServerState.set(ServerStatus.Starting)
         val configFile = File(configPath)
         val logFile = File(configFile.parentFile, "copyparty.log")
-        val error = PythonBridge.start(this, configFile, logFile)
+        val error = PythonBridge.start(this, configFile, logFile, File(filesDir, "copyparty/runtime"))
         if (error != null) {
             fail(error)
             return

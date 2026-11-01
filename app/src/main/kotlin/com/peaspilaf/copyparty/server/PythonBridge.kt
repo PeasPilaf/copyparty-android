@@ -17,12 +17,18 @@ object PythonBridge {
         }
     }
 
-    /** Returns null on success, or a human readable error message. */
-    fun start(context: Context, config: File, log: File): String? {
+    /**
+     * Returns null on success, or a human readable error message.
+     *
+     * [runtimeDir] is where copyparty keeps session keys, uploader-IP salts and its server name;
+     * it must be app-private because Android gives the process no writable home directory.
+     */
+    fun start(context: Context, config: File, log: File, runtimeDir: File): String? {
         ensureStarted(context)
+        runtimeDir.mkdirs()
         val result = Python.getInstance()
             .getModule("cppandroid.boot")
-            .callAttr("start", config.absolutePath, log.absolutePath)
+            .callAttr("start", config.absolutePath, log.absolutePath, runtimeDir.absolutePath)
             .toString()
         return result.ifBlank { null }
     }

@@ -64,7 +64,12 @@ class EmbeddedCopypartyTest {
         val configFile = File(workDir, "copyparty.conf")
         configFile.writeText(ConfigRenderer.render(state, File(workDir, "copyparty.log").absolutePath))
 
-        val error = PythonBridge.start(context, configFile, File(workDir, "copyparty.log"))
+        val error = PythonBridge.start(
+            context,
+            configFile,
+            File(workDir, "copyparty.log"),
+            File(workDir, "runtime"),
+        )
         assertNull("copyparty failed to start: $error", error)
 
         val listing = getWithRetry("http://127.0.0.1:$port/smoke/")

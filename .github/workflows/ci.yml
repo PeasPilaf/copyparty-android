@@ -91,13 +91,20 @@ jobs:
       - name: Install copyparty (same version as the app embeds)
         run: python3 -m pip install --disable-pip-version-check "copyparty==${COPYPARTY_VERSION}"
 
+      # boot.py is pure Python: on the build machine we can start/stop/restart a real copyparty
+      # through the same code path the app uses, without an emulator.
+      - name: Boot lifecycle contract (start, stop, restart in one process)
+        run: python3 scripts/check_boot_contract.py
+
       - name: Build the renderer CLI
         run: ./gradlew :core:installDist --stacktrace
 
       - name: Render a config with the app's renderer and boot real copyparty against it
         run: |
           set -euo pipefail
-          WORK="$(mktemp -d)"
+          WORK="${RUNNER_TEMP}/copyparty-contract"
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
           python3 scripts/make_contract_state.py "$WORK" > "$WORK/state.json"
           core/build/install/core/bin/core "$WORK/state.json" "$WORK/copyparty.conf"
           echo "--- rendered config ---"
@@ -110,8 +117,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: config-contract
-          path: |
-            /tmp/contract-*
+          path: ${{ runner.temp }}/copyparty-contract
           retention-days: 7
 
   instrumented:
