@@ -44,19 +44,22 @@ jobs:
         run: chmod +x gradlew
 
       - name: Unit tests (domain, config rendering, Robolectric UI)
-        run: ./gradlew :core:test :app:testDebugUnitTest --stacktrace
+        run: ./gradlew :core:test :app:testPlayDebugUnitTest --stacktrace
 
-      - name: Assemble debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+      # Every distribution artifact is built on every run so the release paths cannot rot between
+      # tags: Play debug (for the emulator), Play release APK + AAB, and the self-hosted APK.
+      # Without keystore secrets app/build.gradle.kts falls back to the debug signing config.
+      - name: Assemble Play APKs, Play AAB and self-hosted APK
+        run: >-
+          ./gradlew :app:assemblePlayDebug :app:assemblePlayRelease
+          :app:assembleFossRelease :app:bundlePlayRelease --stacktrace
 
-      # The release variant is what people install, so every CI run builds it too instead of letting
-      # the release path rot between tags. Without keystore secrets app/build.gradle.kts falls back to
-      # the debug signing config, so this needs no secrets and still produces an installable APK.
-      - name: Assemble release APK (debug-signed when no keystore secrets)
-        run: ./gradlew :app:assembleRelease --stacktrace
+      # The build variants only mean something if the Play artifact really is policy-clean.
+      - name: Verify the Play artifact requests no broad storage access
+        run: python3 scripts/check_play_compliance.py
 
       - name: Lint
-        run: ./gradlew :app:lintDebug --stacktrace
+        run: ./gradlew :app:lintPlayDebug --stacktrace
 
       - name: Upload test reports
         if: always()
@@ -69,19 +72,15 @@ jobs:
             **/build/reports/lint-results-debug.html
           retention-days: 7
 
-      - name: Upload debug APK
+      - name: Upload APKs and the Play AAB
         uses: actions/upload-artifact@v4
         with:
-          name: copyparty-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload release smoke APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: copyparty-release-smoke-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: copyparty-apks
+          path: |
+            app/build/outputs/apk/play/debug/*.apk
+            app/build/outputs/apk/play/release/*.apk
+            app/build/outputs/apk/foss/release/*.apk
+            app/build/outputs/bundle/playRelease/*.aab
           if-no-files-found: error
           retention-days: 14
 
@@ -193,7 +192,7 @@ jobs:
           emulator-options: >-
             -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
             -camera-back none -camera-front none
-          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
+          script: ./gradlew :app:connectedPlayDebugAndroidTest --stacktrace
 
       - name: Upload instrumented test reports
         if: always()

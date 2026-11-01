@@ -6,12 +6,14 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import com.peaspilaf.copyparty.BuildConfig
 import java.io.File
 
 /**
- * Which folders the app may expose. Sharing any folder on internal storage needs All files access
- * (MANAGE_EXTERNAL_STORAGE); without it the app falls back to a private folder that still works but
- * is only reachable through the app (and USB/MTP on many devices).
+ * Which folders the app may expose. In the self-hosted build, any folder on internal storage can be
+ * shared after granting All files access (MANAGE_EXTERNAL_STORAGE). The Play build never requests
+ * that permission, so it shares the app's own folder - a normal folder on the device that needs no
+ * permissions and is also reachable over USB.
  */
 interface StorageAccess {
     fun hasAllFilesAccess(): Boolean
@@ -31,6 +33,8 @@ interface StorageAccess {
 
 class AndroidStorageAccess(private val context: Context) : StorageAccess {
     override fun hasAllFilesAccess(): Boolean {
+        // The Play build never requests the permission: sharing is limited to the app's own folder.
+        if (!BuildConfig.ALL_FILES_ACCESS) return false
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return true
         // The platform cannot always answer this question: during early boot the storage user may
         // not exist yet, and a plain JVM test host has no platform user at all. Not being able to

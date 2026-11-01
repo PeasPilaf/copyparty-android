@@ -27,19 +27,24 @@ CI_JOBS = {
 }
 CI_ARTIFACTS = (
     "test-reports",
-    "copyparty-debug-apk",
-    "copyparty-release-smoke-apk",
+    "copyparty-apks",
     "config-contract",
     "instrumented-test-reports",
 )
 GRADLE_TASKS = (
     ":core:test",
-    ":app:testDebugUnitTest",
-    ":app:assembleDebug",
-    ":app:assembleRelease",
-    ":app:lintDebug",
+    ":app:testPlayDebugUnitTest",
+    ":app:assemblePlayDebug",
+    ":app:assemblePlayRelease",
+    ":app:assembleFossRelease",
+    ":app:bundlePlayRelease",
+    ":app:lintPlayDebug",
     ":core:installDist",
-    ":app:connectedDebugAndroidTest",
+    ":app:connectedPlayDebugAndroidTest",
+)
+PLAY_MANIFEST = os.path.join(ROOT, "app", "src", "play", "AndroidManifest.xml")
+STORAGE_ACCESS = os.path.join(
+    ROOT, "app", "src", "main", "kotlin", "com", "peaspilaf", "copyparty", "data", "StorageAccess.kt"
 )
 
 
@@ -102,7 +107,7 @@ def upload_has_setting(lines, artifact, setting):
     for index, line in enumerate(lines):
         if not re.match(r"^\s+name:\s*" + re.escape(artifact) + r"\s*$", line):
             continue
-        return any(setting in follow for follow in lines[index + 1:index + 6])
+        return any(setting in follow for follow in lines[index + 1:index + 12])
     return False
 
 
@@ -184,15 +189,17 @@ def main():
     android_text = "\n".join(android)
     for task in GRADLE_TASKS[:5]:
         check(f"CI runs {task}", task in android_text)
-    check("the host unit tests keep their stable task list", ":core:test :app:testDebugUnitTest" in android_text)
-    check("every CI run builds the release variant so it cannot rot", ":app:assembleRelease" in android_text)
-    check("CI keeps the debug APK artifact name stable", "copyparty-debug-apk" in upload_artifact_names(android))
-    check("CI publishes the release smoke APK", "copyparty-release-smoke-apk" in upload_artifact_names(android))
+    check("the host unit tests keep their stable task list",
+          ":core:test :app:testPlayDebugUnitTest" in android_text)
+    check("every CI run builds both distribution flavors so neither can rot",
+          ":app:assemblePlayRelease" in android_text and ":app:assembleFossRelease" in android_text)
+    check("every CI run builds the Play AAB", ":app:bundlePlayRelease" in android_text)
+    check("CI keeps the APK/AAB artifact name stable", "copyparty-apks" in upload_artifact_names(android))
     check("CI publishes test and lint reports", "test-reports" in upload_artifact_names(android))
-    check("the debug APK is only reported when it exists",
-          upload_has_setting(android, "copyparty-debug-apk", "if-no-files-found: error"))
-    check("the release smoke APK is only reported when it exists",
-          upload_has_setting(android, "copyparty-release-smoke-apk", "if-no-files-found: error"))
+    check("the APKs are only reported when they exist",
+          upload_has_setting(android, "copyparty-apks", "if-no-files-found: error"))
+    check("CI verifies the Play artifact is policy-clean",
+          "python3 scripts/check_play_compliance.py" in android_text)
 
     # ---------------------------------------------------------------------------- config contract
     contract = blocks.get("config-contract", [])
@@ -221,8 +228,8 @@ def main():
         emulator_api is not None and robolectric_api is not None and emulator_api.group(1) == robolectric_api.group(1),
         f"emulator={emulator_api.group(1) if emulator_api else None} robolectric={robolectric_api.group(1) if robolectric_api else None}",
     )
-    check("the device test runs the connected Android test task",
-          ":app:connectedDebugAndroidTest" in instrumented_text)
+    check("the device test runs the connected Play-variant test task",
+          ":app:connectedPlayDebugAndroidTest" in instrumented_text)
     check("the device test uses the emulator runner action",
           "reactivecircus/android-emulator-runner@v2" in instrumented_text)
     check("the device test publishes its reports",
@@ -247,14 +254,39 @@ def main():
     check("the release job caches gradle between runs", "gradle/actions/setup-gradle@v4" in release_text)
     check("a tagged push builds a release", re.search(r'tags: \["v\*"\]', release) is not None)
     check("the release workflow may publish GitHub release assets", "contents: write" in release)
-    check("the release workflow builds the release variant", ":app:assembleRelease" in release_text)
-    check("the release workflow uploads the APK", "copyparty-release-apk" in upload_artifact_names(release_lines))
-    check("the release APK is only reported when it exists",
-          upload_has_setting(release_lines, "copyparty-release-apk", "if-no-files-found: error"))
-    check("a tagged release publishes the APK to GitHub releases", "softprops/action-gh-release@v2" in release_text)
+    check("the release workflow builds both release flavors",
+          ":app:assemblePlayRelease" in release_text and ":app:assembleFossRelease" in release_text)
+    check("the release workflow builds the Play AAB", ":app:bundlePlayRelease" in release_text)
+    check("the release workflow uploads the APKs and the AAB",
+          "copyparty-release-artifacts" in upload_artifact_names(release_lines))
+    check("the release artifacts are only reported when they exist",
+          upload_has_setting(release_lines, "copyparty-release-artifacts", "if-no-files-found: error"))
+    check("a tagged release publishes the APKs and the AAB", "softprops/action-gh-release@v2" in release_text)
+    check("the release workflow verifies Play compliance",
+          "python3 scripts/check_play_compliance.py" in release_text)
     check("release runs cannot cancel each other mid-publish", "cancel-in-progress: false" in release)
     check("a real signing key is optional",
           "ANDROID_KEYSTORE_BASE64:" in release_text and "if: env.ANDROID_KEYSTORE_BASE64 != ''" in release_text)
+
+    # ------------------------------------------------------------------------ play policy invariants
+    try:
+        play_manifest = read(PLAY_MANIFEST)
+    except OSError:
+        play_manifest = ""
+    check("the Play flavor removes the All files access permission", "MANAGE_EXTERNAL_STORAGE" in play_manifest
+          and 'tools:node="remove"' in play_manifest)
+    check("the Play flavor removes the legacy external-storage permissions",
+          "READ_EXTERNAL_STORAGE" in play_manifest and "WRITE_EXTERNAL_STORAGE" in play_manifest)
+    try:
+        storage_access = read(STORAGE_ACCESS)
+    except OSError:
+        storage_access = ""
+    check("storage access is gated on the build flavor", "BuildConfig.ALL_FILES_ACCESS" in storage_access)
+    app_build_text = read(APP_BUILD)
+    check("the play flavor sets ALL_FILES_ACCESS=false",
+          'create("play")' in app_build_text and 'buildConfigField("boolean", "ALL_FILES_ACCESS", "false")' in app_build_text)
+    check("the foss flavor sets ALL_FILES_ACCESS=true",
+          'create("foss")' in app_build_text and 'buildConfigField("boolean", "ALL_FILES_ACCESS", "true")' in app_build_text)
 
     # --------------------------------------------------------------------------------- dependabot
     check("dependabot uses version 2 config", re.search(r"^version:\s*2\s*$", dependabot, re.MULTILINE) is not None)

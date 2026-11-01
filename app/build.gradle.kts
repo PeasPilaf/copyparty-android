@@ -41,6 +41,23 @@ android {
         }
     }
 
+    // One codebase, two honest distributions:
+    //  * play  - for Google Play. Does NOT request MANAGE_EXTERNAL_STORAGE, because Play only grants
+    //            broad file access to a short list of app categories and reviews it. Shares the app's
+    //            own folder (and anything clients upload into it).
+    //  * foss  - self-hosted build for GitHub Releases / F-Droid. Can serve any folder on the device.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("play") {
+            dimension = "distribution"
+            buildConfigField("boolean", "ALL_FILES_ACCESS", "false")
+        }
+        create("foss") {
+            dimension = "distribution"
+            buildConfigField("boolean", "ALL_FILES_ACCESS", "true")
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"

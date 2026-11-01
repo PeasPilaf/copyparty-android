@@ -48,21 +48,29 @@ jobs:
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
-      - name: Build release APK
+      - name: Build the Play AAB and both release APKs
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease --stacktrace
+        run: >-
+          ./gradlew :app:assemblePlayRelease :app:bundlePlayRelease
+          :app:assembleFossRelease --stacktrace
 
-      - name: List APKs
-        run: ls -l app/build/outputs/apk/release/
+      - name: Verify the Play artifact requests no broad storage access
+        run: python3 scripts/check_play_compliance.py
 
-      - name: Upload APK as workflow artifact
+      - name: List artifacts
+        run: ls -l app/build/outputs/apk/play/release/ app/build/outputs/apk/foss/release/ app/build/outputs/bundle/playRelease/
+
+      - name: Upload artifacts as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: copyparty-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: copyparty-release-artifacts
+          path: |
+            app/build/outputs/apk/play/release/*.apk
+            app/build/outputs/apk/foss/release/*.apk
+            app/build/outputs/bundle/playRelease/*.aab
           if-no-files-found: error
           retention-days: 30
 
@@ -70,5 +78,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/*.apk
+          files: |
+            app/build/outputs/apk/play/release/*.apk
+            app/build/outputs/apk/foss/release/*.apk
+            app/build/outputs/bundle/playRelease/*.aab
           generate_release_notes: true

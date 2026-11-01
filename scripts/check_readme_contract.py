@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Assert that the README says only what the repository actually does.
+"""Assert that the documentation says only what the repository actually does.
 
-This is the documentation test for a project whose only compiler is CI. It reads the README, the
+This is the documentation test for a project whose only compiler is CI. It reads the README and
+CONTRIBUTING.md (user-facing behaviour and engineering detail respectively), the
 workflows, the build files and the permission model, then fails when the README names a job, artifact,
 gradle task, version, API level or permission flag that no longer exists (or when it stops documenting
 how to add a permission or how to watch CI).
@@ -29,6 +30,7 @@ from check_ci_contract import (  # noqa: E402 - sibling script, same directory
 )
 
 README_PATH = os.path.join(ROOT, "README.md")
+CONTRIBUTING_PATH = os.path.join(ROOT, "CONTRIBUTING.md")
 APP_BUILD = os.path.join(ROOT, "app", "build.gradle.kts")
 MODEL = os.path.join(
     ROOT, "core", "src", "main", "kotlin", "com", "peaspilaf", "copyparty", "core", "Model.kt"
@@ -68,7 +70,9 @@ def main():
         if not ok:
             failures.append(name)
 
-    readme = read(README_PATH)
+    # README.md is the user-facing description; the engineering detail lives in CONTRIBUTING.md.
+    # The checks below are about the documentation as a whole, so they read both.
+    readme = read(README_PATH) + "\n" + read(CONTRIBUTING_PATH)
     ci = read(CI_PATH)
     release = read(RELEASE_PATH)
     dependabot = read(DEPENDABOT_PATH)
@@ -154,11 +158,10 @@ def main():
 
     # ------------------------------------------------------------------- permission documentation
     permission_flags = PERMISSION.findall(model)
-    sharing = section(readme, "Sharing model")
     check("the permission model exposes at least one flag", bool(permission_flags))
     for enum_name, flag in permission_flags:
         check(f"the README documents the {flag} permission flag for {enum_name}",
-              sharing is not None and f"`{flag}`" in sharing, f"flag {flag!r}")
+              f"`{flag}`" in readme, f"flag {flag!r}")
 
     walkthrough = section(readme, "Adding a new share permission")
     check("the README has an end-to-end walkthrough for a new share permission", walkthrough is not None)
