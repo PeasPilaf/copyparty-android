@@ -12,11 +12,13 @@ AndroidManifest.xml sources, so a manifest overlay that silently stops working f
 """
 import glob
 import os
+import re
 import shutil
 import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APP_BUILD = os.path.join(ROOT, "app", "build.gradle.kts")
 PLAY_APK = os.path.join(ROOT, "app", "build", "outputs", "apk", "play", "release")
 FOSS_APK = os.path.join(ROOT, "app", "build", "outputs", "apk", "foss", "release")
 PLAY_AAB = os.path.join(ROOT, "app", "build", "outputs", "bundle", "playRelease")
@@ -90,14 +92,16 @@ def main() -> int:
     )
     check("the self-hosted APK still requests network access", "android.permission.INTERNET" in foss_manifest)
 
+    version = re.search(r'versionName\s*=\s*"([^"]+)"', open(APP_BUILD, encoding="utf-8").read())
+    expected_version = version.group(1) if version else ""
     package = next(
         (line for line in play_manifest.splitlines() if line.startswith("package:")),
         "",
     )
     check(
-        "the Play APK is the app itself",
-        "name='com.peaspilaf.copyparty'" in package and "versionName='0.1.0'" in package,
-        package,
+        "the Play APK is the app itself at the version in the build file",
+        "name='com.peaspilaf.copyparty'" in package and expected_version in package,
+        f"{package} (expected version {expected_version!r})",
     )
 
     # The two artifacts must differ in the one way this whole flavor split exists for.
