@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -20,13 +21,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.peaspilaf.copyparty.data.StorageAccess
 import java.io.File
+
+/**
+ * The in-app fallback when no system Settings screen could be opened. Tagged so the journey tests
+ * can tell "the app explained the manual steps" from "the tap silently did nothing".
+ */
+internal const val StorageGrantHelp = "storage-grant-help"
+
+/** Dismisses [StorageGrantHelp]. */
+internal const val StorageGrantHelpDismiss = "storage-grant-help-dismiss"
 
 /**
  * Picks the folder a share is rooted in.
@@ -46,13 +55,16 @@ internal fun FolderPickerScreen(
     onSelect: (File) -> Unit,
     onCancel: () -> Unit,
 ) {
-    val context = LocalContext.current
     var accessGranted by remember(storage) { mutableStateOf(storage.hasAllFilesAccess()) }
     var roots by remember(storage) { mutableStateOf(storage.browseRoots()) }
+    // Shown only when the system refused every route to its own All-files-access screen.
+    var grantHelp by remember(storage) { mutableStateOf(false) }
 
     // Coming back from the system "All files access" screen must change the picker immediately.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        accessGranted = storage.hasAllFilesAccess()
+        val granted = storage.hasAllFilesAccess()
+        accessGranted = granted
+        if (granted) grantHelp = false
         roots = storage.browseRoots()
     }
 
@@ -120,7 +132,10 @@ internal fun FolderPickerScreen(
                     )
                     Button(
                         onClick = {
-                            runCatching { context.startActivity(storage.allFilesAccessIntent()) }
+                            // Never a bare startActivity: some OEM Settings builds have no
+                            // app-specific All-files-access page, and a throw used to be
+                            // swallowed, leaving the tap with no visible effect.
+                            if (!storage.openAllFilesAccess()) grantHelp = true
                         },
                         modifier = Modifier.testTag(Tags.StorageGrant),
                     ) {
@@ -210,6 +225,38 @@ internal fun FolderPickerScreen(
         TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
             Text("Cancel")
         }
+    }
+
+    if (grantHelp) {
+        AlertDialog(
+            onDismissRequest = { grantHelp = false },
+            title = { Text("Allow access in Settings") },
+            text = {
+                // The tag lives on the container so tests assert the message, not the dialog chrome.
+                Column(
+                    modifier = Modifier.testTag(StorageGrantHelp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "Android did not open its All files access screen on this phone. " +
+                            "You can turn the permission on yourself:",
+                    )
+                    Text(
+                        text = "Settings -> Apps -> Special app access -> All files access -> " +
+                            "Copyparty -> Allow",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { grantHelp = false },
+                    modifier = Modifier.testTag(StorageGrantHelpDismiss),
+                ) {
+                    Text("Got it")
+                }
+            },
+        )
     }
 }
 

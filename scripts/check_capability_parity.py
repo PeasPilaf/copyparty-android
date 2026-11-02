@@ -64,6 +64,7 @@ MUTATION_VERBS = (
 # An entry here is a decision somebody made, not an oversight: keep the reasons to one line.
 ALLOWLIST = {
     "update": "generic state-transition helper; screens call the named mutations above it",
+    "allFilesAccessIntent": "raw intent kept for tests; the button calls openAllFilesAccess(), which tries it first",
 }
 
 

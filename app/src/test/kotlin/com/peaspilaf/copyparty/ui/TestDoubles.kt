@@ -81,6 +81,8 @@ class FakeStorageAccess(
     var allFilesAccess: Boolean = false,
     override val supportsExternalFolders: Boolean = true,
     private val unreadable: MutableSet<File> = mutableSetOf(),
+    /** What [openAllFilesAccess] reports; false is the "no system screen worked" case. */
+    var openAllFilesAccessResult: Boolean = true,
 ) : StorageAccess {
 
     init {
@@ -88,7 +90,21 @@ class FakeStorageAccess(
         phoneRoot.mkdirs()
     }
 
+    /** How many times the picker asked the system to show its All-files-access screen. */
+    var openCalls: Int = 0
+        private set
+
+    /** The intent the fake would have launched, so tests can assert the requested screen. */
+    var lastOpenIntent: Intent? = null
+        private set
+
     override fun hasAllFilesAccess(): Boolean = allFilesAccess
+
+    override fun openAllFilesAccess(): Boolean {
+        openCalls++
+        lastOpenIntent = allFilesAccessIntent()
+        return openAllFilesAccessResult
+    }
 
     override fun allFilesAccessIntent(): Intent =
         Intent(GRANT_ACTION).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -122,5 +138,5 @@ class FakeStorageAccess(
 fun testViewModel(
     store: FakeConfigStore = FakeConfigStore(),
     server: FakeServerRuntime = FakeServerRuntime(),
-    storage: FakeStorageAccess = FakeStorageAccess(),
+    storage: StorageAccess = FakeStorageAccess(),
 ): AppViewModel = AppViewModel(store, server, storage)
