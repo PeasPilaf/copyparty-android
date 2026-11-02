@@ -1,6 +1,12 @@
 package com.peaspilaf.copyparty.data
 
+import android.app.Application
+import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
@@ -11,6 +17,7 @@ import java.io.File
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -22,11 +29,13 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class StorageAccessTest {
     private lateinit var context: Context
+    private lateinit var application: Application
     private lateinit var storage: AndroidStorageAccess
 
     @Before
     fun setUp() {
-        context = ApplicationProvider.getApplicationContext<Context>()
+        application = ApplicationProvider.getApplicationContext()
+        context = application
         storage = AndroidStorageAccess(context)
     }
 
@@ -87,5 +96,81 @@ class StorageAccessTest {
 
         assertThat(intent.action).isEqualTo(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
         assertThat(intent.data).isEqualTo(Uri.parse("package:${context.packageName}"))
+    }
+
+    @Test
+    fun `opening All files access prefers this app's own screen`() {
+        registerSettingsScreen(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, "package")
+        registerSettingsScreen(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+        registerSettingsScreen(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package")
+
+        assertThat(storage.openAllFilesAccess()).isTrue()
+
+        val opened = shadowOf(application).nextStartedActivity
+        assertThat(opened.action).isEqualTo(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+        assertThat(opened.data).isEqualTo(Uri.parse("package:${context.packageName}"))
+        assertThat(shadowOf(application).nextStartedActivity).isNull()
+    }
+
+    @Test
+    fun `opening All files access falls back to the global list when the app screen is missing`() {
+        // Some OEM Settings builds never register the per-app action, but do have the full list.
+        registerSettingsScreen(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+
+        assertThat(storage.openAllFilesAccess()).isTrue()
+
+        val opened = shadowOf(application).nextStartedActivity
+        assertThat(opened.action).isEqualTo(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+        assertThat(opened.data).isNull()
+        assertThat(shadowOf(application).nextStartedActivity).isNull()
+    }
+
+    @Test
+    fun `opening All files access falls back to this app's details page as the last route`() {
+        registerSettingsScreen(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package")
+
+        assertThat(storage.openAllFilesAccess()).isTrue()
+
+        val opened = shadowOf(application).nextStartedActivity
+        assertThat(opened.action).isEqualTo(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+        assertThat(opened.data).isEqualTo(Uri.parse("package:${context.packageName}"))
+    }
+
+    @Test
+    fun `opening All files access reports failure and starts nothing when no screen exists`() {
+        assertThat(storage.openAllFilesAccess()).isFalse()
+
+        assertThat(shadowOf(application).nextStartedActivity).isNull()
+    }
+
+    @Test
+    fun `a Settings screen that throws is skipped instead of ending the attempt`() {
+        // The screen is advertised, but this OEM build rejects it: that must be a fallback, not a
+        // dead end. The wrapper throws only for the app-specific action.
+        val throwingContext = object : ContextWrapper(context) {
+            override fun startActivity(intent: Intent) {
+                if (intent.action == Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION) {
+                    throw ActivityNotFoundException("OEM Settings has no per-app page")
+                }
+                super.startActivity(intent)
+            }
+        }
+        registerSettingsScreen(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, "package")
+        registerSettingsScreen(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+
+        assertThat(AndroidStorageAccess(throwingContext).openAllFilesAccess()).isTrue()
+
+        val opened = shadowOf(application).nextStartedActivity
+        assertThat(opened.action).isEqualTo(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+    }
+
+    /** Registers a Settings activity that handles [action], the way a device's Settings app does. */
+    private fun registerSettingsScreen(action: String, dataScheme: String? = null) {
+        val shadowPackageManager = shadowOf(context.packageManager)
+        val component = ComponentName("com.android.settings", "com.android.settings.CopypartyTestSettings")
+        shadowPackageManager.addActivityIfNotPresent(component)
+        val filter = IntentFilter(action)
+        if (dataScheme != null) filter.addDataScheme(dataScheme)
+        shadowPackageManager.addIntentFilterForActivity(component, filter)
     }
 }
