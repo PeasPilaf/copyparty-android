@@ -88,8 +88,11 @@ class FossStorageJourneyTest {
 
     @After
     fun stopEverything() {
+        mark(context, "teardown: dumping diagnostics")
         dumpDiagnostics(context)
+        mark(context, "teardown: stopping server")
         stopTheServer()
+        mark(context, "teardown: done")
         shell("appops set ${context.packageName} MANAGE_EXTERNAL_STORAGE deny")
     }
 
@@ -185,6 +188,13 @@ class FossStorageJourneyTest {
             "the file ended up in the app's own folder, so the share is not the folder the user picked",
             File(AndroidStorageAccess(context).appShareRoot(), fileName).exists(),
         )
+        mark(context, "all assertions passed")
+
+        // Stop through the UI, the way a person does, so teardown has nothing left to force.
+        compose.tap(JourneyTags.NAV_HOME)
+        compose.tap(JourneyTags.HOME_STOP)
+        compose.awaitTag(JourneyTags.HOME_START)
+        mark(context, "server stopped from the UI")
     }
 
     // -- Steps ---------------------------------------------------------------------------------
