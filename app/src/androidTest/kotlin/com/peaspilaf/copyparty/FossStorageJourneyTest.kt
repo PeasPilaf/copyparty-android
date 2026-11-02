@@ -68,6 +68,7 @@ class FossStorageJourneyTest {
 
     @After
     fun stopEverything() {
+        dumpDiagnostics(context)
         stopTheServer()
         shell("appops set ${context.packageName} MANAGE_EXTERNAL_STORAGE deny")
     }
@@ -79,12 +80,15 @@ class FossStorageJourneyTest {
             storageAccess().hasAllFilesAccess(),
         )
 
+        mark(context, "granted: hasAllFilesAccess=" + storageAccess().hasAllFilesAccess())
         compose.awaitTag(JourneyTags.FIRST_RUN_CHECKLIST)
+        mark(context, "first run checklist shown")
         compose.tap(JourneyTags.NAV_SHARES)
         compose.tap(JourneyTags.ADD_SHARE)
 
         // Both roots are offered now; the phone root is the one that was missing.
         compose.awaitTag(JourneyTags.PICKER_ROOT_PHONE)
+        mark(context, "picker open with both roots")
         compose.awaitTag(JourneyTags.PICKER_ROOT_APP)
         compose.tap(JourneyTags.PICKER_ROOT_PHONE)
 
@@ -92,15 +96,19 @@ class FossStorageJourneyTest {
         compose.waitUntil(30_000) {
             compose.textOrNull(JourneyTags.PICKER_BREADCRUMB)?.contains(folderName) == true
         }
+        mark(context, "folder opened: " + (compose.textOrNull(JourneyTags.PICKER_BREADCRUMB) ?: "?"))
 
         compose.tap(JourneyTags.PICKER_SELECT)
         finishPickingIfTheEditorOpens()
         compose.awaitTag(JourneyTags.SHARE_ROW)
+        mark(context, "share saved")
 
         compose.tap(JourneyTags.NAV_HOME)
         compose.tap(JourneyTags.HOME_START)
+        mark(context, "start tapped")
         compose.awaitTag(JourneyTags.HOME_ADDRESS, timeoutMs = 120_000)
         val address = addressIn(compose.textOf(JourneyTags.HOME_ADDRESS))
+        mark(context, "address shown: " + address + " status=" + ServerState.status.value)
 
         compose.tap(JourneyTags.NAV_SHARES)
         val shareText = compose.textOf(JourneyTags.SHARE_URL)
@@ -109,11 +117,38 @@ class FossStorageJourneyTest {
         // Fetch over loopback: the emulator's own LAN interface is not a reliable route to itself.
         val shareUrl = localShareUrl(address, shareText)
 
-        awaitHttpContains(shareUrl, fileName)
+        mark(context, "share link read: " + shareText + " -> local " + shareUrl)
+
+        // Make the next failure explain itself instead of waiting two minutes for a silent timeout:
+        // prove the saved share points at the folder the test seeded, and that the app can read it.
+        val stateJson = File(context.filesDir, "app-state.json").readText()
+        val localPath = runCatching {
+            org.json.JSONObject(stateJson).getJSONArray("shares").getJSONObject(0).getString("localPath")
+        }.getOrElse { throw AssertionError("no saved share; app-state.json was: " + stateJson) }
+        val servedFile = File(localPath, fileName)
+        assertTrue(
+            "the saved share is rooted at '" + localPath + "' but '" + fileName + "' is not there; " +
+                "state=" + stateJson,
+            servedFile.isFile,
+        )
+        val listing = runCatching { String(httpGet(shareUrl.trimEnd('/') + "/"), Charsets.UTF_8) }
+            .getOrElse {
+                throw AssertionError(
+                    "GET " + shareUrl + "/ failed; share=" + localPath +
+                        " fileExists=" + servedFile.isFile + " status=" + ServerState.status.value,
+                    it,
+                )
+            }
+        assertTrue(
+            "GET " + shareUrl + "/ did not list " + fileName + "; share=" + localPath +
+                "; body=" + listing.take(1500),
+            listing.contains(fileName),
+        )
+
         assertArrayEquals(
             "the served folder did not serve the file that is really in Download",
             fileContents.toByteArray(Charsets.UTF_8),
-            awaitHttpBytes("$shareUrl/$fileName"),
+            awaitHttpBytes(shareUrl.trimEnd('/') + "/" + fileName),
         )
 
         // And it is really the external folder, not a copy inside the app's private storage.

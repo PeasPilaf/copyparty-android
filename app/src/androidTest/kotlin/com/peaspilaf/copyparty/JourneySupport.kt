@@ -1,5 +1,7 @@
 package com.peaspilaf.copyparty
 
+import android.content.Context
+import android.util.Log
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -10,6 +12,9 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import com.peaspilaf.copyparty.server.ServerState
+import com.peaspilaf.copyparty.server.serverLogTail
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -142,6 +147,45 @@ internal fun absoluteShareUrl(homeAddress: String, shareText: String): String {
     val origin = Regex("https?://[^/\\s]+").find(homeAddress)?.value
         ?: throw AssertionError("no origin in the home address '$homeAddress'")
     return origin.trimEnd('/') + "/" + text.trimStart('/').ifEmpty { "" }
+}
+
+/**
+ * The folder a journey writes breadcrumbs and diagnostics into. UTP copies
+ * `Android/media/<pkg>/additional_test_output` off the device, so a red emulator run has the app's
+ * own copyparty log, the saved state and the last step the journey reached.
+ */
+internal fun diagnosticsDir(context: Context): File? {
+    val dir = context.getExternalMediaDirs().firstOrNull()?.resolve("additional_test_output")
+    return runCatching {
+        dir?.mkdirs()
+        dir?.takeIf { it.isDirectory }
+    }.getOrNull()
+}
+
+/** Records the step the journey is on, in logcat and in the artifact a failed run uploads. */
+internal fun mark(context: Context, step: String) {
+    Log.i("journey", step)
+    runCatching {
+        val dir = diagnosticsDir(context) ?: return@runCatching
+        File(dir, "journey-steps.txt").appendText("$step\n")
+    }
+}
+
+/** Copies the app's own diagnostics somewhere a failed CI run can collect them. */
+internal fun dumpDiagnostics(context: Context) {
+    runCatching {
+        val dir = diagnosticsDir(context) ?: return@runCatching
+        File(context.filesDir, "app-state.json")
+            .takeIf { it.isFile }
+            ?.copyTo(File(dir, "app-state.json"), overwrite = true)
+        File(context.filesDir, "copyparty/copyparty.log")
+            .takeIf { it.isFile }
+            ?.copyTo(File(dir, "copyparty.log"), overwrite = true)
+        File(dir, "server-status.txt").writeText(
+            ServerState.status.value.toString() + "\n\n" +
+                serverLogTail(context.filesDir).takeLast(4_000),
+        )
+    }
 }
 
 /**

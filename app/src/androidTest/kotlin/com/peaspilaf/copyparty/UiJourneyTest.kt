@@ -76,6 +76,7 @@ class UiJourneyTest {
 
     @After
     fun stopEverything() {
+        dumpDiagnostics(context)
         stopTheServer()
     }
 
