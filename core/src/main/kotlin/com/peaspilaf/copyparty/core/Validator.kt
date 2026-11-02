@@ -122,9 +122,39 @@ object Validator {
                 }
             }
 
+            if (share.safTreeUri.isNotEmpty()) {
+                validateSafShare(index, share, issues)
+            }
+
             if (share.grants.none { it.permissions.isNotEmpty() }) {
                 issues += Issue(Severity.WARNING, "$at.grants", "Nobody can access this share.")
             }
+        }
+    }
+
+    /**
+     * A folder picked through the Android Storage Access Framework is a read-only snapshot: the Play
+     * build has no write access to the original folder, and the generated config must not pretend
+     * otherwise. Write permissions on such a share are refused before anything is saved.
+     */
+    private fun validateSafShare(index: Int, share: Share, issues: MutableList<Issue>) {
+        val at = "shares[$index]"
+        if (!share.safTreeUri.startsWith("content://")) {
+            issues += Issue(
+                Severity.ERROR,
+                "$at.safTreeUri",
+                "Pick the folder again with Android's folder picker.",
+            )
+        }
+        val writePermissions = setOf(Permission.UPLOAD, Permission.MOVE, Permission.DELETE, Permission.ADMIN)
+        val offenders = share.grants.filter { grant -> grant.permissions.any { it in writePermissions } }
+        if (offenders.isNotEmpty()) {
+            issues += Issue(
+                Severity.ERROR,
+                "$at.grants",
+                "Folders picked with Android's folder picker are read-only. Use the self-hosted build " +
+                    "to share a folder read-write.",
+            )
         }
     }
 

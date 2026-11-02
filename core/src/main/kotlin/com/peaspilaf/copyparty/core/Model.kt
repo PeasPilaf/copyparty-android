@@ -63,6 +63,12 @@ data class Share(
     val grants: List<Grant> = emptyList(),
     val enabled: Boolean = true,
     val extraVolFlags: String = "",
+    /**
+     * When set, this share is a folder the user granted through Android's Storage Access Framework
+     * (the Play build, which cannot ask for All files access). [localPath] is then the app's mirror of
+     * that folder, the volume is read-only, and copyparty reads file contents through the SAF shim.
+     */
+    val safTreeUri: String = "",
 )
 
 @Serializable

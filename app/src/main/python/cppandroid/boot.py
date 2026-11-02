@@ -77,6 +77,15 @@ def _patch_svchub():
     _patched = True
 
 
+def configure_saf(roots_json):
+    """Register the SAF mirror roots before copyparty is imported, then install the shim."""
+    from . import saf
+
+    count = saf.configure(roots_json)
+    saf.install()
+    return count
+
+
 def _run(argv):
     global _error
     try:
@@ -91,7 +100,7 @@ def _run(argv):
         _error = traceback.format_exc()
 
 
-def start(conf_path, log_path="", runtime_dir=""):
+def start(conf_path, log_path="", runtime_dir="", saf_roots="[]"):
     """Start copyparty with the config at ``conf_path``. Returns "" or an error message."""
     global _thread, _error
     with _lock:
@@ -109,6 +118,11 @@ def start(conf_path, log_path="", runtime_dir=""):
         configure_environment(runtime_dir)
         _patch_signals()
         _patch_svchub()
+        try:
+            configure_saf(saf_roots)
+        except Exception:
+            # A broken SAF mirror must never stop a normal (path-based) server from starting.
+            traceback.print_exc()
 
         argv = ["copyparty", "-c", conf_path, "--http-only", "--no-crt", "-q"]
         if log_path:

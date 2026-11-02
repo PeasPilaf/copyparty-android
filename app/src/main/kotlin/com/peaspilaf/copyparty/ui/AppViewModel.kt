@@ -10,8 +10,10 @@ import com.peaspilaf.copyparty.core.Severity
 import com.peaspilaf.copyparty.core.Share
 import com.peaspilaf.copyparty.core.User
 import com.peaspilaf.copyparty.core.Validator
+import android.net.Uri
 import com.peaspilaf.copyparty.data.ConfigStore
 import com.peaspilaf.copyparty.data.StorageAccess
+import com.peaspilaf.copyparty.data.saf.SafImporter
 import com.peaspilaf.copyparty.server.ServerRuntime
 import com.peaspilaf.copyparty.server.ServerStatus
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +31,7 @@ class AppViewModel(
     private val store: ConfigStore,
     private val server: ServerRuntime,
     val storage: StorageAccess,
+    private val safImporter: SafImporter? = null,
 ) {
     private val initial = store.load()
     private val _state = MutableStateFlow(initial)
@@ -160,6 +163,29 @@ class AppViewModel(
     fun stopServer() = server.stop()
 
     fun urls(): List<String> = (server.status.value as? ServerStatus.Running)?.urls.orEmpty()
+
+    /**
+     * Mirrors a folder picked through Android's folder picker and saves it as a read-only share.
+     * The Play build has no write access to that folder, so the grants are view-only by construction.
+     */
+    suspend fun createSafShare(treeUri: Uri, name: String? = null): Share? {
+        val importer = safImporter ?: return null
+        val id = newShareId()
+        val imported = importer.import(treeUri, id)
+        val shareName = name?.takeIf { it.isNotBlank() } ?: imported.rootName
+        val share = Share(
+            id = id,
+            name = shareName,
+            urlPath = suggestUrlPath(shareName),
+            localPath = imported.localPath,
+            grants = listOf(Grant(Grant.EVERYONE, setOf(Permission.VIEW))),
+            safTreeUri = treeUri.toString(),
+        )
+        saveShare(share)
+        return share
+    }
+
+    fun safImportError(): String? = safImporter?.lastError()
 
     fun newShareId(): String = UUID.randomUUID().toString()
 

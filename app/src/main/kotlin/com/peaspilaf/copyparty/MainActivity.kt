@@ -15,7 +15,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container = (application as CopypartyApp).container
-        val viewModel = AppViewModel(container.configStore, container.serverRuntime, container.storage)
+        val viewModel = AppViewModel(
+            container.configStore,
+            container.serverRuntime,
+            container.storage,
+            container.safImporter,
+        )
         setContent {
             val state by viewModel.state.collectAsState()
             CopypartyTheme(themeMode = state.settings.theme) {

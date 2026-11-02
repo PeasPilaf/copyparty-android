@@ -23,12 +23,25 @@ object PythonBridge {
      * [runtimeDir] is where copyparty keeps session keys, uploader-IP salts and its server name;
      * it must be app-private because Android gives the process no writable home directory.
      */
-    fun start(context: Context, config: File, log: File, runtimeDir: File): String? {
+    fun start(
+        context: Context,
+        config: File,
+        log: File,
+        runtimeDir: File,
+        safRootsJson: String = "[]",
+    ): String? {
         ensureStarted(context)
         runtimeDir.mkdirs()
+        com.peaspilaf.copyparty.data.saf.SafBridge.configure(context)
         val result = Python.getInstance()
             .getModule("cppandroid.boot")
-            .callAttr("start", config.absolutePath, log.absolutePath, runtimeDir.absolutePath)
+            .callAttr(
+                "start",
+                config.absolutePath,
+                log.absolutePath,
+                runtimeDir.absolutePath,
+                safRootsJson,
+            )
             .toString()
         return result.ifBlank { null }
     }
