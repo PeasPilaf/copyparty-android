@@ -199,15 +199,7 @@ jobs:
           emulator-options: >-
             -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
             -camera-back none -camera-front none
-          script: |
-            set -o pipefail
-            ./gradlew :app:connectedFossDebugAndroidTest --stacktrace || {
-              # A red emulator job must be diagnosable from its artifacts alone.
-              adb logcat -d > "$RUNNER_TEMP/emulator-logcat.txt" 2>/dev/null || true
-              adb shell run-as com.peaspilaf.copyparty.debug \
-                cat files/copyparty/copyparty.log > "$RUNNER_TEMP/copyparty.log" 2>/dev/null || true
-              exit 1
-            }
+          script: ./gradlew :app:connectedFossDebugAndroidTest --stacktrace
 
       - name: Upload instrumented test reports
         if: always()
@@ -217,6 +209,7 @@ jobs:
           path: |
             app/build/reports/androidTests/**
             app/build/outputs/androidTest-results/**
+            app/build/outputs/connected_android_test_additional_output/**
           retention-days: 7
 
       - name: Upload emulator diagnostics
