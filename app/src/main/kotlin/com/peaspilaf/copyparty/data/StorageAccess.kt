@@ -16,6 +16,15 @@ import java.io.File
  * permissions and is also reachable over USB.
  */
 interface StorageAccess {
+    /**
+     * Whether this build may offer folders outside the app's own folder at all.
+     *
+     * The self-hosted build can (after All files access); the Play build cannot, because it must not
+     * request that permission. Screens use this to say which build the user has instead of showing
+     * a button that can never work - the Play build only explains, and offers "Add files".
+     */
+    val supportsExternalFolders: Boolean get() = true
+
     fun hasAllFilesAccess(): Boolean
 
     /** Intent that opens the system "All files access" toggle for this app. */
@@ -32,6 +41,9 @@ interface StorageAccess {
 }
 
 class AndroidStorageAccess(private val context: Context) : StorageAccess {
+    /** The Play build has no broad-storage permission, so it can only offer its own folder. */
+    override val supportsExternalFolders: Boolean get() = BuildConfig.ALL_FILES_ACCESS
+
     override fun hasAllFilesAccess(): Boolean {
         // The Play build never requests the permission: sharing is limited to the app's own folder.
         if (!BuildConfig.ALL_FILES_ACCESS) return false

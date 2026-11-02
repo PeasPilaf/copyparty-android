@@ -21,19 +21,20 @@ engineering detail; [README.md](README.md) describes what the app does.
 
 ## Project status
 
-The features in the README exist and are enforced by three CI jobs: unit and Robolectric tests, a
-contract job that feeds the app's rendered config to real copyparty, and an emulator job that boots
-the embedded interpreter inside the app process.
+The features in the README exist and are enforced by three CI jobs: unit and Robolectric tests plus a
+capability-parity gate, a contract job that feeds the app's rendered config to real copyparty, and an
+emulator job that drives the shipped app against the real embedded server.
 
 ## Build and test — on GitHub only
 
 This project intentionally does not support local Android builds. CI is the only compiler: `./gradlew`
 on a laptop is not part of the workflow, and every build, test and contract check runs in GitHub
 Actions. The checks that do not need an Android build can still be run by hand:
-`python3 scripts/check_ci_contract.py` and `python3 scripts/check_readme_contract.py` need only the
-checkout, and `python3 scripts/check_boot_contract.py` additionally needs Python 3.12 with
-`copyparty==1.20.26` installed. `scripts/check_server_contract.py` is driven by the renderer binary,
-which CI builds with `:core:installDist`.
+`python3 scripts/check_ci_contract.py`, `python3 scripts/check_readme_contract.py` and
+`python3 scripts/check_capability_parity.py` need only the checkout, and
+`python3 scripts/check_boot_contract.py` additionally needs Python 3.12 with `copyparty==1.20.26`
+installed. `scripts/check_server_contract.py` is driven by the renderer binary, which CI builds with
+`:core:installDist`.
 
 ### Pinned toolchain
 
@@ -57,13 +58,45 @@ the README and `scripts/check_ci_contract.py` refer to them.
 
 | Job | Timeout | What it runs | Artifacts |
 | --- | --- | --- | --- |
-| `Android build + unit tests` | 60 min | `:core:test`, `:app:testDebugUnitTest`, `:app:assembleDebug`, `:app:assembleRelease`, `:app:lintDebug` | `test-reports`, `copyparty-debug-apk`, `copyparty-release-smoke-apk` |
+| `Android build + unit tests` | 60 min | `:core:test`, `:app:testPlayDebugUnitTest`, `:app:assemblePlayDebug`, `:app:assemblePlayRelease`, `:app:assembleFossRelease`, `:app:bundlePlayRelease`, `scripts/check_play_compliance.py`, `scripts/check_capability_parity.py`, `:app:lintPlayDebug` | `test-reports`, `copyparty-apks` |
 | `Config contract (real copyparty)` | 20 min | `scripts/check_ci_contract.py`, `scripts/check_readme_contract.py`, `scripts/check_boot_contract.py`, `:core:installDist`, the renderer CLI, `scripts/check_server_contract.py` | `config-contract` |
-| `Android device test (emulator)` | 60 min | `:app:connectedDebugAndroidTest` on an API 34 emulator | `instrumented-test-reports` |
+| `Android device test (emulator)` | 60 min | `:app:connectedFossDebugAndroidTest` on an API 34 emulator | `instrumented-test-reports` |
 
 The Android job builds the release variant on every run (`:app:assembleRelease`), so release-only
 packaging or Chaquopy breakage cannot sit unnoticed until the next tag. With no keystore secrets it
 uses the debug signing config and still produces an installable APK.
+
+### Journey tests (the emulator job)
+
+The emulator job runs the self-hosted (`foss`) debug build, because that is the one with every
+user-facing capability, and it drives the shipped app against the real embedded server. Nothing about
+the server is faked. Each test name is a promise:
+
+| Test | Promise |
+| --- | --- |
+| `UiJourneyTest.a novice can create a share, start, browse, download and delete it` | Home's first-run state reaches the folder picker, a share exists, the server starts, the in-app browser lists and downloads the file, and the share can be deleted again |
+| `UiJourneyTest.the address shown on Home really serves the shared folder` | the address Home prints is copyparty's own page and serves the file byte for byte |
+| `UiJourneyTest.deleting the last share returns the app to the first-run state` | deleting the last share survives an activity recreation and leaves no ghost row |
+| `UiJourneyTest.a file a client uploads shows up in the app's listing` | the served folder really contains client files, and the app lists a file it did not create |
+| `FossStorageJourneyTest.granting all files access lets the picker reach internal storage and serve a real folder` | All files access makes the picker reach `Download`, and the server serves a file that is really there - not a copy in the app's folder |
+
+`FossStorageJourneyTest` grants `MANAGE_EXTERNAL_STORAGE` through `appops` and seeds `/sdcard/Download`
+through `UiAutomation.executeShellCommand`, the same way a shell on the device would, so the test
+covers the self-hosted promise instead of the app's private folder.
+
+### Server truthfulness tests (host tests)
+
+The server lifecycle is covered by plain JVM and Robolectric tests, because those promises are about
+what the app says, not what it draws:
+
+| Test | Promise |
+| --- | --- |
+| `PortInUseTest` | `Running` requires copyparty's own fingerprint on the port and a live interpreter; a foreign listener becomes `Port <port> is used by another app. Choose another port in Settings.` |
+| `ApplyConfigTest` | an edit re-renders the config and restarts the server with one `ACTION_RESTART`; the old URLs never stay on screen; applying while stopped just starts |
+| `NotificationJourneyTest` | the running notification shows the address with Open and Stop, and a failed start leaves a dismissible, tappable notification |
+| `NotificationPermissionTest` | the first start asks for POST_NOTIFICATIONS, and Android versions without it are never asked |
+| `BootStartedServerTest` | start-on-boot starts the server and posts a confirmation, and refuses a broken configuration |
+| `ServerLogTailTest` | the last lines of copyparty's log are readable, and a missing or unreadable log is empty text instead of a crash |
 
 ### Release workflow
 
@@ -91,6 +124,7 @@ run in CI exactly as shown; each check prints `PASS`/`FAIL` plus the promise it 
 | `scripts/check_server_contract.py` | boots real copyparty with the app-rendered config and checks every HTTP/WebDAV ACL promise below |
 | `scripts/check_ci_contract.py` | every CI job keeps its stable name, timeout, cache and artifacts; the release smoke build stays in CI; dependabot stays grouped and weekly |
 | `scripts/check_readme_contract.py` | this README matches the workflows: job names, timeouts, artifact names, gradle tasks, versions, emulator API level, and the permission walkthrough |
+| `scripts/check_capability_parity.py` | every capability in `AppViewModel` and `StorageAccess` has a control a user can reach - a mutation nothing calls, or a storage capability nothing uses, fails CI unless it is allowlisted with a written reason |
 
 The config job pipes `state.json` through the app's own renderer binary
 (`core/build/install/core/bin/core`) and hands the result to **real** copyparty, so a wrong flag or a
@@ -139,16 +173,37 @@ gh release view <tag>
 
 How to read a failure:
 
-* `Android build + unit tests` — a compile error or a unit/Robolectric test. Download `test-reports`
-  and open `index.html`; the failing test name is the specification that broke.
+* `Android build + unit tests` — a compile error, a unit/Robolectric test, or the capability-parity
+  gate. Download `test-reports` and open `index.html`; the failing test name is the specification that
+  broke. A `FAIL  every view model mutation has a reachable control` line names the function whose
+  control is missing.
 * `Config contract (real copyparty)` — read the `FAIL  <sentence>` line in the log. The
   `config-contract` artifact contains `state.json`, the rendered `copyparty.conf` and `server.log`.
   A failure here means the app wrote a config real copyparty does not accept or does not enforce.
 * `Android device test (emulator)` — check `instrumented-test-reports`; a boot timeout is infra, an
-  assertion failure is the embedded interpreter.
-* `Docs and workflow contract` — this README, `ci.yml` or `release.yml` drifted. Both scripts run on
-  a laptop with `python3`; fix the file, not the check.
+  assertion failure is the journey promise that broke (the screen and the promise are in the test
+  name).
+* `Docs and workflow contract` — this README, `ci.yml` or `release.yml` drifted. All three contract
+  scripts run on a laptop with `python3`; fix the file, not the check.
 * The release smoke step — the release variant, signing fallback or Chaquopy packaging broke.
+
+## Adding a capability a user can reach
+
+The capability-parity gate (`scripts/check_capability_parity.py`) exists because two shipped features
+were unreachable: `AppViewModel.deleteShare()` with no delete control, and
+`StorageAccess.browseRoots()` / `allFilesAccessIntent()` with no picker that used them.
+
+When you add a command to `AppViewModel` (a public function whose name is a command verb) or a
+capability to `StorageAccess`, do one of these in the same change:
+
+1. **Give it a control.** Call it from `app/src/main/kotlin` outside its own file, with the testTag the
+   journeys use. This is the normal case.
+2. **Allowlist it, with a reason.** Add the name to `ALLOWLIST` in the script and write the one-line
+   reason in the same entry. An entry that outlives its capability fails the gate, so the list cannot
+   rot into a pile of forgotten names.
+
+Extend the emulator journey when the control is part of a user story; the journey tests are the
+documentation for what a screen promises.
 
 ## Adding a new share permission end to end
 
@@ -185,6 +240,8 @@ One codebase, two artifacts, because Google Play and self-hosting have different
 | `play` | Google Play (AAB) | The app's own folder. The Play build does **not** request `MANAGE_EXTERNAL_STORAGE`; Google Play only grants broad file access to a short list of declared, reviewed app categories, and a personal file server is not reliably one of them. |
 | `foss` | GitHub Releases / F-Droid (APK) | Any folder on the device after granting All files access, plus the app's own folder. |
 
+Both builds have every screen, including Expert mode; only the storage reach differs.
+
 `scripts/check_play_compliance.py` proves it from the built artifacts: it fails if the Play APK or
 AAB requests `MANAGE_EXTERNAL_STORAGE` (or the legacy external-storage permissions), and it fails if
 the self-hosted APK loses direct folder access.
@@ -194,13 +251,13 @@ the self-hosted APK loses direct folder access.
 | Task | Meaning |
 | --- | --- |
 | `:core:test` | JVM tests for the sharing model, config renderer and validator |
-| `:app:testPlayDebugUnitTest` | Robolectric + Compose tests for the Play build |
-| `:app:assemblePlayDebug` | Debuggable Play APK for the emulator job |
+| `:app:testPlayDebugUnitTest` | Robolectric + Compose + server-lifecycle tests for the Play build |
+| `:app:assemblePlayDebug` | Debuggable Play APK (also the flavor the emulator starts from) |
 | `:app:assemblePlayRelease` | Play release APK (store-build smoke test) |
 | `:app:bundlePlayRelease` | Play AAB |
 | `:app:assembleFossRelease` | Self-hosted release APK |
 | `:app:lintPlayDebug` | Lint report |
-| `:app:connectedPlayDebugAndroidTest` | Instrumented test on the emulator |
+| `:app:connectedFossDebugAndroidTest` | The journeys on the emulator, against the self-hosted build |
 | `:core:installDist` | Renderer CLI used by the config contract job |
 
 Artifacts: `test-reports`, `copyparty-apks` (play debug/release APK, play AAB, foss release APK),
@@ -226,5 +283,6 @@ The UI labels are the product; the copyparty ACL flags are the wire format they 
 | --- | --- |
 | `core/` | Pure-JVM sharing model, copyparty config renderer and validator (no Android) |
 | `app/` | Compose UI, foreground service, Python bridge, embedded copyparty |
-| `scripts/` | Contract checks: config against real copyparty, boot lifecycle, docs/CI consistency |
+| `app/src/androidTest/` | The emulator journeys: real activity, real embedded server, no fakes |
+| `scripts/` | Contract checks: config against real copyparty, boot lifecycle, docs/CI consistency, capability parity |
 | `.github/workflows/` | CI and release pipelines |

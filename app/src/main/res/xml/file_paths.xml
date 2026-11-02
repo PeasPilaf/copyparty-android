@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The folders the native file browser may hand out through a content:// URI.
+
+  Downloads that land below Android 10 go into the app's own Downloads and cache folders; without a
+  matching path here, opening or sharing a downloaded file is a dead action. MediaStore downloads
+  (Android 10+) already come with a content URI of their own and do not need this file.
+-->
+<paths>
+    <external-files-path name="external_files" path="." />
+    <external-cache-path name="external_cache" path="." />
+    <files-path name="files" path="." />
+    <cache-path name="cache" path="." />
+</paths>

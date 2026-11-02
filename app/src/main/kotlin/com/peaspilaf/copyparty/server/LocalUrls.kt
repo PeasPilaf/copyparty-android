@@ -26,4 +26,17 @@ object LocalUrls {
         }
         return urls
     }
+
+    /**
+     * The one URL to hand to *another* device - the notification's address and the QR code's link.
+     *
+     * [serverUrls] deliberately puts the phone talking to itself first (the phone's own browser and
+     * the in-app file screen use it), but a loopback link is useless to a laptop or a friend's phone.
+     * So the address a client is given is the first LAN URL when there is one, and loopback only when
+     * there is not (LAN access off, or no network interface yet).
+     */
+    fun clientUrl(urls: List<String>, port: Int): String =
+        urls.firstOrNull { !it.contains("127.0.0.1") }
+            ?: urls.firstOrNull()
+            ?: "http://127.0.0.1:$port"
 }

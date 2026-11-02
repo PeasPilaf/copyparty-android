@@ -1,9 +1,12 @@
 package com.peaspilaf.copyparty.data
 
 import android.content.Context
+import android.net.Uri
+import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
+import com.peaspilaf.copyparty.BuildConfig
 import java.io.File
 import org.junit.Before
 import org.junit.Test
@@ -70,5 +73,19 @@ class StorageAccessTest {
         val names = storage.listFolders(dir).map { it.name }
 
         assertThat(names).containsExactly("Alpha", "beta", "gamma", "zulu").inOrder()
+    }
+
+    @Test
+    fun `the build says whether it can offer folders outside the app at all`() {
+        // The Play build cannot (and must not ask for) broad storage access; the self-hosted build can.
+        assertThat(storage.supportsExternalFolders).isEqualTo(BuildConfig.ALL_FILES_ACCESS)
+    }
+
+    @Test
+    fun `the All files access intent opens this app's own settings page`() {
+        val intent = storage.allFilesAccessIntent()
+
+        assertThat(intent.action).isEqualTo(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+        assertThat(intent.data).isEqualTo(Uri.parse("package:${context.packageName}"))
     }
 }

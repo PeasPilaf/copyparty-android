@@ -51,6 +51,19 @@
                 android:value="local_file_server" />
         </service>
 
+        <!-- Downloads saved by the native file browser are opened and shared through a content://
+             URI. Every app refuses a file:// URI on Android 7+, so a download without this provider
+             is a file the user can never open again from the app. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <receiver
             android:name=".server.BootReceiver"
             android:enabled="true"

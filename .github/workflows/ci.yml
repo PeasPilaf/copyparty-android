@@ -58,6 +58,11 @@ jobs:
       - name: Verify the Play artifact requests no broad storage access
         run: python3 scripts/check_play_compliance.py
 
+      # Every capability the app can perform needs a control a user can reach. This is the gate for
+      # the two shipped UX bugs: `deleteShare` and the All-files-access picker existed with no UI.
+      - name: Verify every capability has a reachable control
+        run: python3 scripts/check_capability_parity.py
+
       - name: Lint
         run: ./gradlew :app:lintPlayDebug --stacktrace
 
@@ -181,7 +186,9 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # Proves the embedded CPython + copyparty actually serve files on Android.
+      # The self-hosted build is the one with every user-facing capability (All files access, any
+      # folder), so the journeys - Home, the picker, the real embedded server, browse, upload and
+      # delete - run against it. The plain copyparty boot test runs in the same task.
       - name: Run instrumented test on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -192,7 +199,7 @@ jobs:
           emulator-options: >-
             -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
             -camera-back none -camera-front none
-          script: ./gradlew :app:connectedPlayDebugAndroidTest --stacktrace
+          script: ./gradlew :app:connectedFossDebugAndroidTest --stacktrace
 
       - name: Upload instrumented test reports
         if: always()

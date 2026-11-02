@@ -40,7 +40,7 @@ GRADLE_TASKS = (
     ":app:bundlePlayRelease",
     ":app:lintPlayDebug",
     ":core:installDist",
-    ":app:connectedPlayDebugAndroidTest",
+    ":app:connectedFossDebugAndroidTest",
 )
 PLAY_MANIFEST = os.path.join(ROOT, "app", "src", "play", "AndroidManifest.xml")
 STORAGE_ACCESS = os.path.join(
@@ -200,6 +200,8 @@ def main():
           upload_has_setting(android, "copyparty-apks", "if-no-files-found: error"))
     check("CI verifies the Play artifact is policy-clean",
           "python3 scripts/check_play_compliance.py" in android_text)
+    check("CI verifies every capability has a reachable control",
+          "python3 scripts/check_capability_parity.py" in android_text)
 
     # ---------------------------------------------------------------------------- config contract
     contract = blocks.get("config-contract", [])
@@ -228,8 +230,8 @@ def main():
         emulator_api is not None and robolectric_api is not None and emulator_api.group(1) == robolectric_api.group(1),
         f"emulator={emulator_api.group(1) if emulator_api else None} robolectric={robolectric_api.group(1) if robolectric_api else None}",
     )
-    check("the device test runs the connected Play-variant test task",
-          ":app:connectedPlayDebugAndroidTest" in instrumented_text)
+    check("the device test runs the connected self-hosted test task, the build with every capability",
+          ":app:connectedFossDebugAndroidTest" in instrumented_text)
     check("the device test uses the emulator runner action",
           "reactivecircus/android-emulator-runner@v2" in instrumented_text)
     check("the device test publishes its reports",

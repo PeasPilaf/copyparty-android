@@ -59,6 +59,22 @@ class ConfigRendererValuesTest {
                     ),
                 ),
             ),
+            // Expert values are the last lines of the file in both sections, which is exactly where a
+            // stray blank line or a second trailing newline would show up.
+            AppState(
+                users = listOf(User("alice", "hunter2")),
+                shares = listOf(
+                    Share(
+                        id = "s1",
+                        name = "Shared",
+                        urlPath = "shared",
+                        localPath = "/storage/emulated/0/Pictures",
+                        grants = listOf(Grant("alice", setOf(Permission.UPLOAD))),
+                        extraVolFlags = "nodupe",
+                    ),
+                ),
+                settings = ServerSettings(extraArgs = "--hist\n--no-dupe"),
+            ),
         )
 
         for (state in states) {

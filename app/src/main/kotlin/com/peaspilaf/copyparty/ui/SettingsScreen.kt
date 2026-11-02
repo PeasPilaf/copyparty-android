@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.peaspilaf.copyparty.core.AppState
-import com.peaspilaf.copyparty.core.ServerSettings
 import com.peaspilaf.copyparty.core.Severity
 import com.peaspilaf.copyparty.core.ThemeMode
 import com.peaspilaf.copyparty.core.Validator
@@ -33,9 +32,18 @@ import com.peaspilaf.copyparty.core.Validator
 /**
  * The handful of knobs that change how the server behaves. They are edited in one form and saved as
  * one change; a value the server could not start with is explained and never written.
+ *
+ * Expert mode is the one switch that takes effect at once, because it is the door to the advanced
+ * tools rather than part of the server's config - and turning it on opens those tools rather than
+ * leaving the user to find them.
  */
 @Composable
-internal fun SettingsScreen(viewModel: AppViewModel, state: AppState) {
+internal fun SettingsScreen(
+    viewModel: AppViewModel,
+    state: AppState,
+    onOpenExpert: () -> Unit,
+    onOpenLog: () -> Unit,
+) {
     val initial = state.settings
     var port by remember(initial) { mutableStateOf(initial.port.toString()) }
     var lanAccess by remember(initial) { mutableStateOf(initial.lanAccess) }
@@ -45,7 +53,9 @@ internal fun SettingsScreen(viewModel: AppViewModel, state: AppState) {
     var errors by remember(initial) { mutableStateOf(emptyList<String>()) }
 
     fun save() {
-        val edited = ServerSettings(
+        // Copy from the saved settings so the expert-only values (raw args, expert mode) survive a
+        // save of this form instead of being silently reset to their defaults.
+        val edited = state.settings.copy(
             port = port.trim().toIntOrNull() ?: 0,
             lanAccess = lanAccess,
             startOnBoot = startOnBoot,
@@ -169,6 +179,46 @@ internal fun SettingsScreen(viewModel: AppViewModel, state: AppState) {
             modifier = Modifier.fillMaxWidth().testTag(Tags.SettingsSave),
         ) {
             Text("Save settings")
+        }
+
+        Text(text = "Expert mode", style = MaterialTheme.typography.titleMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "Show the expert tools", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = "The raw copyparty config, global arguments and per-folder " +
+                        "advanced flags, and the full copyparty web UI.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = state.settings.expertMode,
+                onCheckedChange = { on ->
+                    // Saving immediately is the point: the switch is a door, not a server setting.
+                    viewModel.updateSettings(state.settings.copy(expertMode = on))
+                    if (on) onOpenExpert()
+                },
+                modifier = Modifier.testTag(Tags.ExpertToggle),
+            )
+        }
+        if (state.settings.expertMode) {
+            OutlinedButton(
+                onClick = onOpenExpert,
+                modifier = Modifier.fillMaxWidth().testTag(Tags.SettingsExpert),
+            ) {
+                Text("Expert tools")
+            }
+        }
+
+        OutlinedButton(
+            onClick = onOpenLog,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Server log")
         }
     }
 }

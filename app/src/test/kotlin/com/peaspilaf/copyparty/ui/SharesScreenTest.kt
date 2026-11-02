@@ -70,13 +70,13 @@ class SharesScreenTest {
         compose.onNode(hasTestTag(UiTags.ShareName) and hasText("Photos"), useUnmergedTree = true)
             .assertExists()
         compose.onNode(
-            hasTestTag(UiTags.SharePath) and hasText("/photos", substring = true),
+            hasTestTag(UiTags.ShareUrl) and hasText("/photos", substring = true),
             useUnmergedTree = true,
         ).assertExists()
         compose.onNode(hasTestTag(UiTags.ShareName) and hasText("Docs"), useUnmergedTree = true)
             .assertExists()
         compose.onNode(
-            hasTestTag(UiTags.SharePath) and hasText("/docs", substring = true),
+            hasTestTag(UiTags.ShareUrl) and hasText("/docs", substring = true),
             useUnmergedTree = true,
         ).assertExists()
     }

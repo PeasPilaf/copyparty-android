@@ -131,4 +131,54 @@ class ModelSerializationTest {
         assertThat(decoded.settings).isEqualTo(ServerSettings())
         assertThat(decoded.version).isEqualTo(1)
     }
+
+    @Test
+    fun `expert settings and folder flags survive a json round trip`() {
+        val expert = AppState(
+            shares = listOf(
+                Share(
+                    id = "s1",
+                    name = "Photos",
+                    urlPath = "photos",
+                    localPath = "/storage/photos",
+                    extraVolFlags = "nodupe, nosub",
+                ),
+            ),
+            settings = ServerSettings(
+                expertMode = true,
+                extraArgs = "--hist\n--no-dupe",
+            ),
+        )
+
+        val encoded = json.encodeToString(AppState.serializer(), expert)
+        val decoded = json.decodeFromString(AppState.serializer(), encoded)
+
+        assertThat(decoded).isEqualTo(expert)
+        assertThat(decoded.settings.expertMode).isTrue()
+        assertThat(decoded.settings.extraArgs).isEqualTo("--hist\n--no-dupe")
+        assertThat(decoded.shares.single().extraVolFlags).isEqualTo("nodupe, nosub")
+    }
+
+    @Test
+    fun `a state file written before expert mode loads with empty expert values`() {
+        // Expert mode is additive: an old app-state.json must keep working, and the person's existing
+        // shares must not gain or lose a flag just because the file predates the field.
+        val olderFile = """
+            {
+              "users": [{"name": "alice", "password": "hunter2"}],
+              "shares": [
+                {"id": "s1", "name": "Photos", "urlPath": "photos", "localPath": "/storage/photos",
+                 "grants": [{"principal": "*", "permissions": ["VIEW"]}]}
+              ],
+              "settings": {"port": 3923, "lanAccess": true, "serverName": "copyparty"}
+            }
+        """.trimIndent()
+
+        val decoded = json.decodeFromString(AppState.serializer(), olderFile)
+
+        assertThat(decoded.settings.expertMode).isFalse()
+        assertThat(decoded.settings.extraArgs).isEmpty()
+        assertThat(decoded.shares.single().extraVolFlags).isEmpty()
+        assertThat(decoded.shares.single().grants).containsExactly(Grant(Grant.EVERYONE, setOf(Permission.VIEW)))
+    }
 }

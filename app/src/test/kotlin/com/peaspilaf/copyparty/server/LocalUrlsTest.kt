@@ -41,6 +41,25 @@ class LocalUrlsTest {
     }
 
     @Test
+    fun `the address handed to another device is the lan one when there is one`() {
+        // Home's own list starts with loopback, but a QR code or a copied link is for another
+        // device: it must be the LAN address, and loopback only when there is no LAN address.
+        assertThat(
+            LocalUrls.clientUrl(
+                listOf("http://127.0.0.1:3923", "http://192.168.1.20:3923"),
+                3923,
+            ),
+        ).isEqualTo("http://192.168.1.20:3923")
+
+        assertThat(LocalUrls.clientUrl(listOf("http://127.0.0.1:3923"), 3923))
+            .isEqualTo("http://127.0.0.1:3923")
+
+        // As long as the server has no network interface, it still says where it is.
+        assertThat(LocalUrls.clientUrl(emptyList(), 4646))
+            .isEqualTo("http://127.0.0.1:4646")
+    }
+
+    @Test
     fun `lan addresses never include loopback or link local addresses`() {
         val addresses = LocalUrls.lanAddresses()
 

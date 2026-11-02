@@ -35,6 +35,7 @@ object Validator {
 
         validateUsers(state, issues)
         validateShares(state, issues)
+        validateExpertValues(state, issues)
 
         if (state.shares.none { it.enabled }) {
             issues += Issue(Severity.ERROR, "shares", "Enable at least one shared folder.")
@@ -123,6 +124,47 @@ object Validator {
 
             if (share.grants.none { it.permissions.isNotEmpty() }) {
                 issues += Issue(Severity.WARNING, "$at.grants", "Nobody can access this share.")
+            }
+        }
+    }
+
+    /**
+     * Expert mode hands the user raw copyparty config lines. A line that starts a new `[section]`
+     * would silently rewrite a different part of the file, and a control character would break the
+     * one-value-per-line format, so both are refused before anything is saved.
+     */
+    private fun validateExpertValues(state: AppState, issues: MutableList<Issue>) {
+        val args = state.settings.extraArgs
+        if (args.lines().any { it.trimStart().startsWith("[") }) {
+            issues += Issue(
+                Severity.ERROR,
+                "settings.extraArgs",
+                "Expert arguments may not start a new [section].",
+            )
+        }
+        if (args.any { it.isISOControl() && it != '\n' && it != '\r' && it != '\t' }) {
+            issues += Issue(
+                Severity.ERROR,
+                "settings.extraArgs",
+                "Expert arguments may not contain control characters.",
+            )
+        }
+
+        state.shares.forEachIndexed { index, share ->
+            val flags = share.extraVolFlags
+            if (flags.lines().any { it.trimStart().startsWith("[") }) {
+                issues += Issue(
+                    Severity.ERROR,
+                    "shares[$index].extraVolFlags",
+                    "Advanced folder flags may not start a new [section].",
+                )
+            }
+            if (flags.any { it.isISOControl() }) {
+                issues += Issue(
+                    Severity.ERROR,
+                    "shares[$index].extraVolFlags",
+                    "Advanced folder flags must be one line without control characters.",
+                )
             }
         }
     }
