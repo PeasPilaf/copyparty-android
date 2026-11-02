@@ -63,6 +63,26 @@ class FossStorageJourneyTest {
         shell("mkdir -p /sdcard/$folderName")
         shell("echo hello from a real folder > /sdcard/$folderName/$fileName")
 
+        // Diagnostics: what does the app itself see in that folder, and can it write there?
+        // (If shell seeding is invisible to the app but an app write works, that difference is the
+        // bug; if neither works, the appops grant is not effective in this process.)
+        val realFolder = File("/storage/emulated/0/$folderName")
+        val realFile = File(realFolder, fileName)
+        val appWrite = runCatching {
+            realFolder.mkdirs()
+            realFile.writeText(fileContents)
+            realFile.isFile
+        }.isSuccess
+        mark(
+            context,
+            "seed: appWrite=" + appWrite +
+                " fileExists=" + realFile.isFile +
+                " canRead=" + realFile.canRead() +
+                " folderExists=" + realFolder.isDirectory +
+                " appList=" + (realFolder.listFiles()?.take(8)?.joinToString { it.name } ?: "null") +
+                " shellList=" + shell("ls -la /sdcard/$folderName 2>&1 | head -8").replace("\n", " | "),
+        )
+
         recreateActivity()
     }
 
@@ -126,9 +146,18 @@ class FossStorageJourneyTest {
             org.json.JSONObject(stateJson).getJSONArray("shares").getJSONObject(0).getString("localPath")
         }.getOrElse { throw AssertionError("no saved share; app-state.json was: " + stateJson) }
         val servedFile = File(localPath, fileName)
+        val folder = servedFile.parentFile
+        val diagnostics =
+            "share=" + localPath +
+                " fileExists=" + servedFile.isFile +
+                " fileCanRead=" + servedFile.canRead() +
+                " folderExists=" + (folder?.isDirectory) +
+                " folderCanRead=" + (folder?.canRead()) +
+                " folderList=" + (folder?.listFiles()?.take(10)?.joinToString { it.name } ?: "null") +
+                " shellList=" + shell("ls -la " + localPath + " 2>&1 | head -10").replace("\n", " | ")
+        mark(context, "serving check: " + diagnostics)
         assertTrue(
-            "the saved share is rooted at '" + localPath + "' but '" + fileName + "' is not there; " +
-                "state=" + stateJson,
+            "the saved share is rooted at '" + localPath + "' but '" + fileName + "' is not there; " + diagnostics,
             servedFile.isFile,
         )
         val listing = runCatching { String(httpGet(shareUrl.trimEnd('/') + "/"), Charsets.UTF_8) }
