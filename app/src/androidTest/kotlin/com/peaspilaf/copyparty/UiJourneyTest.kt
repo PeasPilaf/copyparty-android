@@ -252,9 +252,14 @@ class UiJourneyTest {
     private fun shareUrlFromTheList(address: String): String {
         compose.tap(JourneyTags.NAV_SHARES)
         val shareText = compose.textOf(JourneyTags.SHARE_URL)
+
+        // The link the row hands to another device must be absolute and must not be loopback.
+        assertTrue("the share link must be an absolute URL, was '$shareText'", shareText.startsWith("http://"))
+        assertTrue("the share link must not be the phone's 127.0.0.1, was '$shareText'", !shareText.contains("127.0.0.1"))
+
         // Back to Home, where the browser, the QR code and the address live.
         compose.tap(JourneyTags.NAV_HOME)
-        return absoluteShareUrl(address, shareText).trimEnd('/')
+        return localShareUrl(address, shareText)
     }
 
     private fun awaitTextInUnmergedTree(text: String, timeoutMs: Long = 60_000) {

@@ -144,6 +144,20 @@ internal fun absoluteShareUrl(homeAddress: String, shareText: String): String {
     return origin.trimEnd('/') + "/" + text.trimStart('/').ifEmpty { "" }
 }
 
+/**
+ * The URL the phone itself can always reach: loopback on the running port plus the mount path the
+ * share row shows. The row's own link is the LAN one (what another device needs); inside the
+ * emulator, fetching through the phone's own LAN interface can hang because that interface is not
+ * loopback-routable, which would make a working server look broken.
+ */
+internal fun localShareUrl(homeAddress: String, shareText: String): String {
+    val port = Regex(":([0-9]+)").find(homeAddress)?.groupValues?.get(1) ?: "3923"
+    val path = Regex("https?://[^/\\s]+(/[^\\s]*)").find(shareText.trim())?.groupValues?.get(1)
+        ?: shareText.trim()
+    val mount = if (path.startsWith("/")) path else "/$path"
+    return "http://127.0.0.1:$port" + mount.trimEnd('/')
+}
+
 /** One plain HTTP GET; throws with the URL and the status so a journey failure is readable. */
 internal fun httpGet(url: String, timeoutMs: Int = 20_000): ByteArray {
     val connection = (URL(url).openConnection() as HttpURLConnection).apply {

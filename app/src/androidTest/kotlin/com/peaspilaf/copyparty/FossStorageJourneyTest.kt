@@ -103,7 +103,11 @@ class FossStorageJourneyTest {
         val address = addressIn(compose.textOf(JourneyTags.HOME_ADDRESS))
 
         compose.tap(JourneyTags.NAV_SHARES)
-        val shareUrl = absoluteShareUrl(address, compose.textOf(JourneyTags.SHARE_URL)).trimEnd('/')
+        val shareText = compose.textOf(JourneyTags.SHARE_URL)
+        assertTrue("the share link must be absolute, was '$shareText'", shareText.startsWith("http://"))
+        assertTrue("the share link must not be loopback, was '$shareText'", !shareText.contains("127.0.0.1"))
+        // Fetch over loopback: the emulator's own LAN interface is not a reliable route to itself.
+        val shareUrl = localShareUrl(address, shareText)
 
         awaitHttpContains(shareUrl, fileName)
         assertArrayEquals(

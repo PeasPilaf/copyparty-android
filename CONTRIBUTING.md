@@ -263,7 +263,8 @@ the self-hosted APK loses direct folder access.
 | `:core:installDist` | Renderer CLI used by the config contract job |
 
 Artifacts: `test-reports`, `copyparty-apks` (play debug/release APK, play AAB, foss release APK),
-`config-contract`, `instrumented-test-reports`, and `copyparty-release-artifacts` from the release
+`config-contract`, `instrumented-test-reports`, `emulator-diagnostics` (logcat plus the app's
+copyparty log when the emulator job fails), and `copyparty-release-artifacts` from the release
 workflow.
 
 ## Permission flags
