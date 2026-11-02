@@ -80,7 +80,7 @@ class UiJourneyTest {
     }
 
     @Test
-    fun `a novice can create a share, start, browse, download and delete it`() {
+    fun aNoviceCanCreateAShareStartBrowseDownloadAndDeleteIt() {
         createShareFromTheAppFolder()
         startTheServer()
         val address = homeAddress()
@@ -115,7 +115,7 @@ class UiJourneyTest {
     }
 
     @Test
-    fun `the address shown on Home really serves the shared folder`() {
+    fun theAddressShownOnHomeReallyServesTheSharedFolder() {
         createShareFromTheAppFolder()
         startTheServer()
 
@@ -136,7 +136,7 @@ class UiJourneyTest {
     }
 
     @Test
-    fun `deleting the last share returns the app to the first-run state`() {
+    fun deletingTheLastShareReturnsTheAppToTheFirstRunState() {
         createShareFromTheAppFolder()
         compose.tap(JourneyTags.NAV_SHARES)
 
@@ -161,7 +161,7 @@ class UiJourneyTest {
     }
 
     @Test
-    fun `a file a client uploads shows up in the app's listing`() {
+    fun aFileAClientUploadsShowsUpInTheAppSListing() {
         // The old bug: the folder the app served could never contain a user file. Uploading needs a
         // grant, and an in-app upload goes through the system picker, so the grant is arranged here
         // and the upload is done by a real HTTP client - the same thing the phone's browser does.

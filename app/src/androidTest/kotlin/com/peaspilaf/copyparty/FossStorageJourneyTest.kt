@@ -73,7 +73,7 @@ class FossStorageJourneyTest {
     }
 
     @Test
-    fun `granting all files access lets the picker reach internal storage and serve a real folder`() {
+    fun grantingAllFilesAccessLetsThePickerReachInternalStorageAndServeARealFolder() {
         assertTrue(
             "the grant did not reach the app: hasAllFilesAccess() is still false",
             storageAccess().hasAllFilesAccess(),
