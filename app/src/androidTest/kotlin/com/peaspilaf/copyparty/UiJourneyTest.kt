@@ -315,7 +315,8 @@ class UiJourneyTest {
                 )
                 return
             }
-            if (downloadManagerKnows(name) || savedConfirmationShown(name)) return
+            // A "Saved:" line or a DownloadManager row proves a request was made, not that the
+            // file exists with the right bytes. Keep waiting for the file itself.
             Thread.sleep(500)
         }
         throw AssertionError(

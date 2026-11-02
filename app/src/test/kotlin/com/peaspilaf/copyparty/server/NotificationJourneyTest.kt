@@ -112,7 +112,7 @@ class NotificationJourneyTest {
         val notification = ServerNotifications.bootStarted(app)
 
         val visible = "${shadowOf(notification).contentTitle} ${shadowOf(notification).contentText}".lowercase()
-        assertThat(visible).contains("started on boot")
+        assertThat(visible).contains("starting on boot")
         assertThat(notification.flags and Notification.FLAG_ONGOING_EVENT).isEqualTo(0)
         assertThat(notification.contentIntent).isNotNull()
 
@@ -129,7 +129,7 @@ class NotificationJourneyTest {
         val boot = shadowOf(manager).getNotification(ServerNotifications.BOOT_NOTIFICATION_ID)
         assertThat(boot).isNotNull()
         assertThat("${shadowOf(boot).contentTitle} ${shadowOf(boot).contentText}".lowercase())
-            .contains("started on boot")
+            .contains("starting on boot")
         val running = shadowOf(manager).getNotification(ServerNotifications.RUNNING_NOTIFICATION_ID)
         assertThat(shadowOf(running).contentText.toString()).contains("3923")
     }

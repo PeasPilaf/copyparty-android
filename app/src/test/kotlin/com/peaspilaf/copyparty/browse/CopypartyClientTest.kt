@@ -1,10 +1,8 @@
 package com.peaspilaf.copyparty.browse
 
 import com.google.common.truth.Truth.assertThat
-import com.sun.net.httpserver.HttpExchange
-import com.sun.net.httpserver.HttpServer
 import java.io.File
-import java.net.InetSocketAddress
+import java.net.URLDecoder
 import java.nio.file.Files
 import org.junit.After
 import org.junit.Before
@@ -21,7 +19,7 @@ import org.junit.Test
  */
 class CopypartyClientTest {
 
-    private lateinit var server: HttpServer
+    private lateinit var server: TestHttpServer
     private lateinit var client: CopypartyClient
     private lateinit var work: File
 
@@ -46,16 +44,14 @@ class CopypartyClientTest {
     @Before
     fun setUp() {
         work = Files.createTempDirectory("copyparty-client").toFile()
-        server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/") { exchange -> handle(exchange) }
-        server.start()
-        baseUrl = "http://127.0.0.1:${server.address.port}"
+        server = TestHttpServer { request -> handle(request) }
+        baseUrl = server.baseUrl
         client = CopypartyClient()
     }
 
     @After
     fun tearDown() {
-        server.stop(0)
+        server.close()
         work.deleteRecursively()
     }
 
@@ -182,68 +178,42 @@ class CopypartyClientTest {
 
     // -- the fake copyparty ----------------------------------------------------------------
 
-    private fun handle(exchange: HttpExchange) {
-        try {
-            val path = exchange.requestURI.path
-            val password = exchange.requestHeaders.getFirst("PW")
-            passwordHeaders += password
+    private fun handle(request: TestRequest): TestResponse {
+        val path = URLDecoder.decode(request.path, "UTF-8")
+        val password = request.header("PW")
+        passwordHeaders += password
 
-            if (exchange.requestMethod == "PUT") {
-                handlePut(exchange, path, password)
-                return
-            }
-            when {
-                path.trimEnd('/') == "/secure" -> {
-                    if (password != "hunter2") reply(exchange, 401, "password required")
-                    else reply(exchange, 200, secureListingJson)
-                }
-                path == "/secure/secret.txt" -> {
-                    if (password != "hunter2") reply(exchange, 401, "password required")
-                    else reply(exchange, 200, "top secret\n", "text/plain")
-                }
-                path.trimEnd('/') == "/broken" -> reply(exchange, 200, """{"dirs": [""")
-                path.trimEnd('/') == "/html" -> reply(exchange, 200, "<!doctype html><html></html>", "text/html")
-                path.trimEnd('/') == "/public" -> reply(exchange, 200, listingJson)
-                path.trimEnd('/') == "/public/sub" -> reply(exchange, 200, subListingJson)
-                path == "/public/my file.txt" -> reply(exchange, 200, "spaced\n", "text/plain")
-                path == "/public/a.txt" -> reply(exchange, 200, "hello\n", "text/plain")
-                // Bytes go back exactly as they arrived: a String round trip would replace every
-                // byte that is not valid UTF-8, and "reads back byte for byte" would then be testing
-                // the fake's decoder instead of the client.
-                uploaded.containsKey(path) -> replyBytes(exchange, 200, uploaded.getValue(path))
-                else -> reply(exchange, 404, "not found")
-            }
-        } finally {
-            exchange.close()
+        if (request.method == "PUT") return handlePut(request, path, password)
+
+        return when {
+            path.trimEnd('/') == "/secure" ->
+                if (password != "hunter2") reply(401, "password required") else reply(200, secureListingJson)
+            path == "/secure/secret.txt" ->
+                if (password != "hunter2") reply(401, "password required") else reply(200, "top secret\n", "text/plain")
+            path.trimEnd('/') == "/broken" -> reply(200, """{"dirs": [""")
+            path.trimEnd('/') == "/html" -> reply(200, "<!doctype html><html></html>", "text/html")
+            path.trimEnd('/') == "/public" -> reply(200, listingJson)
+            path.trimEnd('/') == "/public/sub" -> reply(200, subListingJson)
+            path == "/public/my file.txt" -> reply(200, "spaced\n", "text/plain")
+            path == "/public/a.txt" -> reply(200, "hello\n", "text/plain")
+            uploaded.containsKey(path) -> replyBytes(200, uploaded.getValue(path))
+            else -> reply(404, "not found")
         }
     }
 
-    private fun handlePut(exchange: HttpExchange, path: String, password: String?) {
-        val bytes = exchange.requestBody.use { it.readBytes() }
-        if (path.startsWith("/forbidden/")) {
-            reply(exchange, 403, "forbidden")
-            return
-        }
-        if (password != "hunter2") {
-            reply(exchange, 401, "password required")
-            return
-        }
-        uploaded[path] = bytes
-        reply(exchange, 201, "")
+    private fun handlePut(request: TestRequest, path: String, password: String?): TestResponse {
+        if (path.startsWith("/forbidden/")) return reply(403, "forbidden")
+        if (password != "hunter2") return reply(401, "password required")
+        uploaded[path] = request.body
+        return reply(201, "")
     }
 
-    private fun reply(exchange: HttpExchange, status: Int, body: String, contentType: String = "application/json") {
-        replyBytes(exchange, status, body.toByteArray(Charsets.UTF_8), contentType)
-    }
+    private fun reply(status: Int, body: String, contentType: String = "application/json"): TestResponse =
+        replyBytes(status, body.toByteArray(Charsets.UTF_8), contentType)
 
     private fun replyBytes(
-        exchange: HttpExchange,
         status: Int,
         bytes: ByteArray,
         contentType: String = "application/octet-stream",
-    ) {
-        exchange.responseHeaders.set("Content-Type", contentType)
-        exchange.sendResponseHeaders(status, if (bytes.isEmpty()) -1 else bytes.size.toLong())
-        if (bytes.isNotEmpty()) exchange.responseBody.use { it.write(bytes) }
-    }
+    ): TestResponse = TestResponse(status, bytes, contentType)
 }

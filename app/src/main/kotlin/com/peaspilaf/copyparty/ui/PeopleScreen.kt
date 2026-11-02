@@ -29,6 +29,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +49,7 @@ import com.peaspilaf.copyparty.core.AppState
 import com.peaspilaf.copyparty.core.Severity
 import com.peaspilaf.copyparty.core.User
 import com.peaspilaf.copyparty.core.Validator
+import com.peaspilaf.copyparty.server.ServerStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -59,7 +61,14 @@ import kotlinx.coroutines.launch
  * lose access - then offers one tap to undo it.
  */
 @Composable
-internal fun PeopleScreen(viewModel: AppViewModel, state: AppState) {
+internal fun PeopleScreen(
+    viewModel: AppViewModel,
+    state: AppState,
+    showRestartToApply: Boolean = false,
+    onRestartToApply: () -> Unit = {},
+    restartFailure: String? = null,
+) {
+    val running = viewModel.serverStatus.collectAsState().value is ServerStatus.Running
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var formOpen by remember { mutableStateOf(false) }
@@ -125,6 +134,9 @@ internal fun PeopleScreen(viewModel: AppViewModel, state: AppState) {
                 .testTag(Tags.ScreenPeople),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (showRestartToApply) {
+                RestartToApplyBanner(onRestartToApply = onRestartToApply, failure = restartFailure)
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -203,11 +215,16 @@ internal fun PeopleScreen(viewModel: AppViewModel, state: AppState) {
         val losing = state.shares
             .filter { share -> share.grants.any { it.principal == removed.name && it.permissions.isNotEmpty() } }
             .map { it.name }
+        val effect = if (running) {
+            " The running server keeps the old account until you restart it."
+        } else {
+            ""
+        }
         val message = if (losing.isEmpty()) {
-            "Removing ${removed.name} deletes the account. No shared folder gives them access."
+            "Removing ${removed.name} deletes the account. No shared folder gives them access.$effect"
         } else {
             "Removing ${removed.name} deletes the account. They will lose access to " +
-                "${losing.joinToString(", ")}. The folders and their files are kept."
+                "${losing.joinToString(", ")}. The folders and their files are kept.$effect"
         }
         AlertDialog(
             onDismissRequest = { deleting = null },

@@ -66,7 +66,7 @@ object ServerNotifications {
 
     /** A server that came back after a reboot says so, and stays separate from the running one. */
     fun bootStarted(context: Context): Notification =
-        base(context, "Copyparty started on boot", "Tap to open")
+        base(context, "Copyparty is starting on boot", "Tap to open")
             .setOngoing(false)
             .setAutoCancel(true)
             .build()

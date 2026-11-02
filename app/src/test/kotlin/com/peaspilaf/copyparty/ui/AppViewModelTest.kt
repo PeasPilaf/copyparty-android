@@ -7,6 +7,7 @@ import com.peaspilaf.copyparty.core.Permission
 import com.peaspilaf.copyparty.core.ServerSettings
 import com.peaspilaf.copyparty.core.Share
 import com.peaspilaf.copyparty.core.User
+import com.peaspilaf.copyparty.server.ServerStatus
 import org.junit.Test
 
 /**
@@ -29,6 +30,70 @@ class AppViewModelTest {
         localPath = "/storage/$urlPath",
         grants = grants,
     )
+
+    @Test
+    fun `deleting the last share while running stops the server instead of leaving it stale`() {
+        val server = FakeServerRuntime(ServerStatus.Running(listOf("http://127.0.0.1:3923"), 3923))
+        val vm = AppViewModel(
+            FakeConfigStore(
+                AppState(
+                    shares = listOf(share("s1", "photos", listOf(Grant(Grant.EVERYONE, setOf(Permission.VIEW))))),
+                ),
+            ),
+            server,
+            FakeStorageAccess(),
+        )
+
+        vm.deleteShare("s1")
+
+        assertThat(vm.pendingApply.value).isTrue()
+        assertThat(vm.applyIfSupported()).isEqualTo(ServerStatus.Stopped)
+        assertThat(server.stopCalls).isEqualTo(1)
+        assertThat(server.applyCalls).isEqualTo(0)
+        assertThat(vm.pendingApply.value).isFalse()
+    }
+
+    @Test
+    fun `applying a configuration the server cannot use reports why and touches nothing`() {
+        val server = FakeServerRuntime(ServerStatus.Running(listOf("http://127.0.0.1:3923"), 3923))
+        val vm = AppViewModel(
+            FakeConfigStore(
+                AppState(
+                    // A privileged port is a validator ERROR, so this config can never be applied.
+                    settings = ServerSettings(port = 80),
+                    shares = listOf(share("s1", "photos", listOf(Grant(Grant.EVERYONE, setOf(Permission.VIEW))))),
+                ),
+            ),
+            server,
+            FakeStorageAccess(),
+        )
+
+        val result = vm.applyIfSupported()
+
+        assertThat(result).isInstanceOf(ServerStatus.Failed::class.java)
+        assertThat(vm.applyError.value).isNotNull()
+        assertThat(server.applyCalls).isEqualTo(0)
+    }
+
+    @Test
+    fun `revoking a person while running is saved but not live until a restart`() {
+        val server = FakeServerRuntime(ServerStatus.Running(listOf("http://127.0.0.1:3923"), 3923))
+        val vm = AppViewModel(
+            FakeConfigStore(
+                AppState(
+                    users = listOf(alice),
+                    shares = listOf(share("s1", "photos", listOf(Grant("alice", setOf(Permission.VIEW))))),
+                ),
+            ),
+            server,
+            FakeStorageAccess(),
+        )
+
+        vm.deleteUser("alice")
+
+        assertThat(vm.pendingApply.value).isTrue()
+        assertThat(vm.state.value.users).isEmpty()
+    }
 
     @Test
     fun `suggest url path turns a folder name into a lowercase dash slug`() {

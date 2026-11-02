@@ -81,7 +81,8 @@ internal fun ShareEditorScreen(
 
     fun save() {
         saveAttempted = true
-        if (nobodyCanOpen) return
+        // Saving a draft with an invalid link path would leave a share the server cannot start with.
+        if (nobodyCanOpen || draftErrors.isNotEmpty()) return
         viewModel.saveShare(share.copy(grants = liveGrants()))
         onClose()
     }

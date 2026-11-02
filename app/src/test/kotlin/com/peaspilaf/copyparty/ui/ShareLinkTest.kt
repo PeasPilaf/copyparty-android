@@ -48,7 +48,11 @@ class ShareLinkTest {
     private fun show() {
         val viewModel = testViewModel(
             store = FakeConfigStore(AppState(shares = listOf(photos))),
-            server = FakeServerRuntime(ServerStatus.Running(listOf(baseUrl), 3923)),
+            // Production order: loopback first (the phone's own address), LAN after it. A share
+            // link handed to another device must use the LAN one.
+            server = FakeServerRuntime(
+                ServerStatus.Running(listOf("http://127.0.0.1:3923", baseUrl), 3923),
+            ),
         )
         compose.setContent {
             CopypartyTheme(themeMode = ThemeMode.LIGHT) {
@@ -103,17 +107,15 @@ class ShareLinkTest {
     }
 
     @Test
-    fun `a share opens in the in-app browser at its own address`() {
+    fun `sharing a loopback link is impossible because the app hands out the LAN one`() {
         show()
 
-        compose.tap(UiTags.ShareUrl)
+        compose.tap(UiTags.ShareCopy)
 
-        // Owned by the native-expert region: the back control on BrowseScreen.
-        compose.onTag(BROWSE_BACK).assertExists()
-    }
-
-    private companion object {
-        /** The testTag the native-expert region puts on BrowseScreen's back control. */
-        const val BROWSE_BACK = "browse-back"
+        compose.awaitText("copied")
+        val copied = clipboard().primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+        // The phone's own 127.0.0.1 must never be what a person sends to another device.
+        assertThat(copied).doesNotContain("127.0.0.1")
+        assertThat(copied).contains(baseUrl)
     }
 }

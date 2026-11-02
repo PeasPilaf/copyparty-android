@@ -80,4 +80,24 @@ class ApplyChangesTest {
         compose.waitForIdle()
         compose.onTag(UiTags.HomeRestartToApply).assertDoesNotExist()
     }
+
+    @Test
+    fun `an edit on the people screen shows the restart banner where the edit was made`() {
+        val server = FakeServerRuntime(ServerStatus.Running(listOf(url), 3923))
+        val store = FakeConfigStore(AppState(users = listOf(alice), shares = listOf(photos)))
+        compose.setContent {
+            CopypartyTheme(themeMode = ThemeMode.LIGHT) {
+                AppRoot(testViewModel(store = store, server = server))
+            }
+        }
+
+        compose.tap(UiTags.NavPeople)
+        compose.tap(UiTags.deletePerson("alice"))
+        compose.tap(UiTags.DeletePersonConfirm)
+
+        // The old password still works on the running server, so the screen must say so where the
+        // revocation was made - not only on Home, where the user may never look.
+        compose.onTag(UiTags.HomeRestartToApply).assertExists()
+        compose.assertTextShown("Restart to apply")
+    }
 }

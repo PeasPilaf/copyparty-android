@@ -46,7 +46,13 @@ fun AppRoot(viewModel: AppViewModel) {
     val state by viewModel.state.collectAsState()
     val status by viewModel.serverStatus.collectAsState()
     val pendingApply by viewModel.pendingApply.collectAsState()
+    val applyError by viewModel.applyError.collectAsState()
+    // The phone browses itself over loopback; a link handed to another device must be the LAN one.
     val runningUrl = (status as? ServerStatus.Running)?.urls?.firstOrNull()
+    val clientUrl = (status as? ServerStatus.Running)?.let {
+        com.peaspilaf.copyparty.server.LocalUrls.clientUrl(it.urls, it.port)
+    }
+    val serverRunning = status is ServerStatus.Running
 
     var tab by rememberSaveable { mutableStateOf(AppTab.Home) }
     var sharesMode by rememberSaveable { mutableStateOf(SharesMode.List) }
@@ -160,6 +166,7 @@ fun AppRoot(viewModel: AppViewModel) {
                     onOpenLog = { openOverlay(Overlay.Log) },
                     onOpenExpert = { openOverlay(Overlay.Expert) },
                     onRestartToApply = { viewModel.applyIfSupported() },
+                    restartFailure = applyError,
                 )
                 AppTab.Shares -> Box(modifier = Modifier.fillMaxSize()) {
                     // The list stays composed under the picker and the editor, so going one step in
@@ -167,8 +174,8 @@ fun AppRoot(viewModel: AppViewModel) {
                     // an opaque surface and takes the touches, so it really is a modal step.
                     SharesScreen(
                         state = state,
-                        runningUrl = runningUrl,
-                        showRestartToApply = pendingApply && status is ServerStatus.Running,
+                        runningUrl = clientUrl,
+                        showRestartToApply = pendingApply && serverRunning,
                         onAdd = { openPicker(SharesMode.List) },
                         onEdit = { share ->
                             editorDraft = share
@@ -178,6 +185,7 @@ fun AppRoot(viewModel: AppViewModel) {
                         onEnabledChange = { id, enabled -> viewModel.setShareEnabled(id, enabled) },
                         onDeleteConfirmed = { share -> viewModel.deleteShare(share.id) },
                         onRestartToApply = { viewModel.applyIfSupported() },
+                        restartFailure = applyError,
                     )
                     when (sharesMode) {
                         SharesMode.List -> Unit
@@ -223,12 +231,21 @@ fun AppRoot(viewModel: AppViewModel) {
                         }
                     }
                 }
-                AppTab.People -> PeopleScreen(viewModel, state)
+                AppTab.People -> PeopleScreen(
+                    viewModel = viewModel,
+                    state = state,
+                    showRestartToApply = pendingApply && serverRunning,
+                    onRestartToApply = { viewModel.applyIfSupported() },
+                    restartFailure = applyError,
+                )
                 AppTab.Settings -> SettingsScreen(
                     viewModel = viewModel,
                     state = state,
                     onOpenExpert = { openOverlay(Overlay.Expert) },
                     onOpenLog = { openOverlay(Overlay.Log) },
+                    showRestartToApply = pendingApply && serverRunning,
+                    onRestartToApply = { viewModel.applyIfSupported() },
+                    restartFailure = applyError,
                 )
             }
         }

@@ -78,6 +78,7 @@ fun ExpertScreen(viewModel: AppViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsState()
     val status by viewModel.serverStatus.collectAsState()
     val pendingApply by viewModel.pendingApply.collectAsState()
+    val applyError by viewModel.applyError.collectAsState()
     val context = LocalContext.current
 
     var openUrl by remember { mutableStateOf<String?>(null) }
@@ -137,7 +138,10 @@ fun ExpertScreen(viewModel: AppViewModel, onBack: () -> Unit) {
         // running with the old one. Saying so - and offering the restart that actually happens - is
         // the difference between an honest screen and a "saved" that changed nothing.
         if (pendingApply && serverUrl != null) {
-            RestartToApplyBanner(onRestartToApply = { viewModel.applyIfSupported() })
+            RestartToApplyBanner(
+                onRestartToApply = { viewModel.applyIfSupported() },
+                failure = applyError,
+            )
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {

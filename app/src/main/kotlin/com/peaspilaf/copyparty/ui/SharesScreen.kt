@@ -61,6 +61,7 @@ internal fun SharesScreen(
     onEnabledChange: (String, Boolean) -> Unit,
     onDeleteConfirmed: (Share) -> Unit,
     onRestartToApply: () -> Unit,
+    restartFailure: String? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -96,7 +97,7 @@ internal fun SharesScreen(
             }
 
             if (showRestartToApply) {
-                RestartToApplyBanner(onRestartToApply = onRestartToApply)
+                RestartToApplyBanner(onRestartToApply = onRestartToApply, failure = restartFailure)
             }
 
             if (state.shares.isEmpty()) {
@@ -127,12 +128,26 @@ internal fun SharesScreen(
                     onBrowse = onBrowse,
                     onEnabledChange = onEnabledChange,
                     onCopy = {
-                        copyAddress(context, shareLink(share, runningUrl))
-                        scope.launch { snackbar.showSnackbar("Link copied") }
+                        if (runningUrl == null) {
+                            // A bare "/photos" is not a link anyone can open. Say so instead of
+                            // copying something useless and claiming success.
+                            scope.launch {
+                                snackbar.showSnackbar("Start the server to get a shareable link.")
+                            }
+                        } else {
+                            copyAddress(context, shareLink(share, runningUrl))
+                            scope.launch { snackbar.showSnackbar("Link copied") }
+                        }
                     },
                     onSend = {
-                        shareToAnotherApp(context, shareLink(share, runningUrl))
-                        scope.launch { snackbar.showSnackbar("Link shared") }
+                        if (runningUrl == null) {
+                            scope.launch {
+                                snackbar.showSnackbar("Start the server to get a shareable link.")
+                            }
+                        } else {
+                            shareToAnotherApp(context, shareLink(share, runningUrl))
+                            scope.launch { snackbar.showSnackbar("Link shared") }
+                        }
                     },
                     onDelete = { deleting = share },
                 )

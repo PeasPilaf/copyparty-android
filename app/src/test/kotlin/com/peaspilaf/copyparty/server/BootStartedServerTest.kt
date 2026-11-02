@@ -69,7 +69,7 @@ class BootStartedServerTest {
         val visible = with(shadowOf(shadowOf(manager).allNotifications.single())) {
             "$contentTitle $contentText".lowercase()
         }
-        assertThat(visible).contains("started on boot")
+        assertThat(visible).contains("starting on boot")
     }
 
     @Test

@@ -27,6 +27,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.peaspilaf.copyparty.core.AppState
@@ -56,6 +58,7 @@ internal fun HomeScreen(
     onOpenLog: () -> Unit,
     onOpenExpert: () -> Unit,
     onRestartToApply: () -> Unit,
+    restartFailure: String? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -68,9 +71,14 @@ internal fun HomeScreen(
         ActivityResultContracts.OpenMultipleDocuments(),
     ) { documents ->
         if (documents.isNotEmpty()) {
-            val result = FileImporter(context.contentResolver)
-                .import(documents, viewModel.storage.appShareRoot())
-            scope.launch { snackbar.showSnackbar(result.summary) }
+            // Copying a photo library takes long enough to freeze the UI if it ran on the main thread.
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    FileImporter(context.contentResolver)
+                        .import(documents, viewModel.storage.appShareRoot())
+                }
+                snackbar.showSnackbar(result.summary)
+            }
         }
     }
 
@@ -155,7 +163,7 @@ internal fun HomeScreen(
             }
 
             if (showRestartToApply) {
-                RestartToApplyBanner(onRestartToApply = onRestartToApply)
+                RestartToApplyBanner(onRestartToApply = onRestartToApply, failure = restartFailure)
             }
 
             if (errors.isNotEmpty()) {

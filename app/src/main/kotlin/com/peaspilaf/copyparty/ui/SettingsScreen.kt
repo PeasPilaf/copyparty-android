@@ -43,6 +43,9 @@ internal fun SettingsScreen(
     state: AppState,
     onOpenExpert: () -> Unit,
     onOpenLog: () -> Unit,
+    showRestartToApply: Boolean = false,
+    onRestartToApply: () -> Unit = {},
+    restartFailure: String? = null,
 ) {
     val initial = state.settings
     var port by remember(initial) { mutableStateOf(initial.port.toString()) }
@@ -80,6 +83,9 @@ internal fun SettingsScreen(
             .testTag(Tags.ScreenSettings),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (showRestartToApply) {
+            RestartToApplyBanner(onRestartToApply = onRestartToApply, failure = restartFailure)
+        }
         Text(text = "Settings", style = MaterialTheme.typography.headlineSmall)
         Text(
             text = "How the file server behaves. Changes apply the next time it starts.",

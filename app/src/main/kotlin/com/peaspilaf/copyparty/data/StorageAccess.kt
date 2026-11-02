@@ -36,13 +36,28 @@ interface StorageAccess {
     /** Top-level folders the in-app folder picker may browse. */
     fun browseRoots(): List<File>
 
-    fun listFolders(dir: File): List<File> =
-        dir.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") }?.sortedBy { it.name.lowercase() }.orEmpty()
+    /**
+     * Sub-folders of [dir]. Throws [SecurityException] when the folder exists but cannot be listed,
+     * so the picker can say "this folder cannot be opened" instead of pretending it is empty.
+     */
+    fun listFolders(dir: File): List<File> {
+        if (!dir.isDirectory) return emptyList()
+        if (!dir.canRead()) throw SecurityException("Cannot read ${dir.absolutePath}")
+        val children = dir.listFiles() ?: throw SecurityException("Cannot read ${dir.absolutePath}")
+        return children
+            .filter { it.isDirectory && !it.name.startsWith(".") }
+            .sortedBy { it.name.lowercase() }
+    }
 }
 
 class AndroidStorageAccess(private val context: Context) : StorageAccess {
-    /** The Play build has no broad-storage permission, so it can only offer its own folder. */
-    override val supportsExternalFolders: Boolean get() = BuildConfig.ALL_FILES_ACCESS
+    /**
+     * The Play build has no broad-storage permission, so it can only offer its own folder. Below
+     * Android 11 there is no All-files-access permission either and this app does not request the
+     * legacy read/write permissions, so offering the rest of the phone there would be a dead end.
+     */
+    override val supportsExternalFolders: Boolean
+        get() = BuildConfig.ALL_FILES_ACCESS && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
 
     override fun hasAllFilesAccess(): Boolean {
         // The Play build never requests the permission: sharing is limited to the app's own folder.

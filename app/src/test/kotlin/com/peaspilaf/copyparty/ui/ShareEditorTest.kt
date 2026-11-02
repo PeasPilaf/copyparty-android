@@ -70,6 +70,20 @@ class ShareEditorTest {
     )
 
     @Test
+    fun `a draft with an unusable link path is refused instead of saved`() {
+        val store = openEditor(AppState(users = listOf(alice), shares = listOf(share)))
+
+        compose.onTag(UiTags.ShareLinkField).performTextClearance()
+        compose.tap(UiTags.ShareEditorSave)
+        compose.waitForIdle()
+
+        // The store still has the old, valid path and the editor is still open: saving a broken
+        // share would give the server a config it cannot start with.
+        assertThat(store.state.shares.single().urlPath).isEqualTo("photos")
+        compose.onTag(UiTags.ShareEditor).assertIsDisplayed()
+    }
+
+    @Test
     fun `granting alice view access and saving stores exactly that grant`() {
         val store = openEditor(AppState(users = listOf(alice), shares = listOf(share)))
 

@@ -62,7 +62,8 @@ the README and `scripts/check_ci_contract.py` refer to them.
 | `Config contract (real copyparty)` | 20 min | `scripts/check_ci_contract.py`, `scripts/check_readme_contract.py`, `scripts/check_boot_contract.py`, `:core:installDist`, the renderer CLI, `scripts/check_server_contract.py` | `config-contract` |
 | `Android device test (emulator)` | 60 min | `:app:connectedFossDebugAndroidTest` on an API 34 emulator | `instrumented-test-reports` |
 
-The Android job builds the release variant on every run (`:app:assembleRelease`), so release-only
+The Android job builds both release flavors and the Play AAB on every run
+(`:app:assemblePlayRelease`, `:app:assembleFossRelease`, `:app:bundlePlayRelease`), so release-only
 packaging or Chaquopy breakage cannot sit unnoticed until the next tag. With no keystore secrets it
 uses the debug signing config and still produces an installable APK.
 
@@ -101,7 +102,8 @@ what the app says, not what it draws:
 ### Release workflow
 
 `.github/workflows/release.yml` runs on tags matching `v*` (and manually). It builds
-`:app:assembleRelease` and always uploads the APK as `copyparty-release-apk`; on a tag it also
+`:app:assemblePlayRelease`, `:app:assembleFossRelease` and `:app:bundlePlayRelease`, uploads them as
+`copyparty-release-artifacts`; on a tag it also
 publishes that APK to a GitHub release with generated notes. A real keystore is optional: the four
 `ANDROID_KEYSTORE_*` / `ANDROID_KEY_*` secrets switch the build from debug signing to release
 signing.

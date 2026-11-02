@@ -6,6 +6,7 @@ import com.peaspilaf.copyparty.core.Grant
 import com.peaspilaf.copyparty.core.Issue
 import com.peaspilaf.copyparty.core.Permission
 import com.peaspilaf.copyparty.core.ServerSettings
+import com.peaspilaf.copyparty.core.Severity
 import com.peaspilaf.copyparty.core.Share
 import com.peaspilaf.copyparty.core.User
 import com.peaspilaf.copyparty.core.Validator
@@ -42,6 +43,10 @@ class AppViewModel(
     private val _pendingApply = MutableStateFlow(false)
     val pendingApply: StateFlow<Boolean> = _pendingApply.asStateFlow()
 
+    /** Why the last "restart to apply" attempt failed, so the banner can say it instead of nothing. */
+    private val _applyError = MutableStateFlow<String?>(null)
+    val applyError: StateFlow<String?> = _applyError.asStateFlow()
+
     val serverStatus: StateFlow<ServerStatus> get() = server.status
 
     fun update(transform: (AppState) -> AppState) {
@@ -59,12 +64,34 @@ class AppViewModel(
      * screen: the banner staying up is the truth, because the old config is still live.
      */
     fun applyIfSupported(): ServerStatus {
+        _applyError.value = null
+
+        // A configuration the validator refuses can never be handed to copyparty. If the only
+        // problem is that nothing is shareable any more (the user deleted the last share), the
+        // honest state is "stopped": leaving the old server running would keep serving a folder
+        // that no longer exists in the app, under a "running" label.
+        val errors = Validator.validate(_state.value).filter { it.severity == Severity.ERROR }
+        if (errors.isNotEmpty()) {
+            val nothingShareable = errors.all { it.path == "shares" }
+            if (nothingShareable && server.status.value is ServerStatus.Running) {
+                server.stop()
+                appliedState = _state.value
+                _pendingApply.value = false
+                return ServerStatus.Stopped
+            }
+            val failure = ServerStatus.Failed(errors.first().message)
+            _applyError.value = failure.message
+            return failure
+        }
+
         val result = runCatching { server.applyConfig() }.getOrElse { error ->
             ServerStatus.Failed(error.message ?: "The server could not be restarted.")
         }
         if (result !is ServerStatus.Failed) {
             appliedState = _state.value
             _pendingApply.value = false
+        } else {
+            _applyError.value = result.message
         }
         return result
     }

@@ -604,13 +604,20 @@ private fun mimeTypeOf(name: String): String {
 @Composable
 internal fun rememberBrowseFilePicker(): BrowseFilePicker {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var pending by remember { mutableStateOf<((File) -> Unit)?>(null) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val callback = pending
         pending = null
         if (uri != null && callback != null) {
-            val picked = runCatching { copyToCache(context, uri) }.getOrNull()
-            if (picked != null) callback(picked)
+            // The system picker delivers the URI on the main thread; copying a big file to cache
+            // there would freeze the screen (or ANR) for as long as the copy takes.
+            scope.launch {
+                val picked = withContext(Dispatchers.IO) {
+                    runCatching { copyToCache(context, uri) }.getOrNull()
+                }
+                if (picked != null) callback(picked)
+            }
         }
     }
     return remember(launcher) {

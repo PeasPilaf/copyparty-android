@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 internal fun RestartToApplyBanner(
     onRestartToApply: () -> Unit,
     modifier: Modifier = Modifier,
+    failure: String? = null,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -43,6 +44,14 @@ internal fun RestartToApplyBanner(
                 modifier = Modifier.testTag(Tags.HomeRestartToApply),
             ) {
                 Text("Restart server")
+            }
+            if (failure != null) {
+                Text(
+                    text = failure,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("restart-failure"),
+                )
             }
         }
     }

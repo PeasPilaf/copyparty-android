@@ -92,6 +92,9 @@ class ServerService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
+        // If the platform destroys the service (not our own stop path), the interpreter would keep
+        // the sockets open with no notification to stop it. Shut it down off the main thread.
+        Thread({ runCatching { PythonBridge.stop() } }, "copyparty-service-destroy").start()
         super.onDestroy()
     }
 
