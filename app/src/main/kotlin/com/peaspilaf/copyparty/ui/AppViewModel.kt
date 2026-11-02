@@ -1,9 +1,12 @@
 package com.peaspilaf.copyparty.ui
 
 import com.peaspilaf.copyparty.core.AppState
+import com.peaspilaf.copyparty.core.ConfigRenderer
 import com.peaspilaf.copyparty.core.Grant
 import com.peaspilaf.copyparty.core.Issue
+import com.peaspilaf.copyparty.core.Permission
 import com.peaspilaf.copyparty.core.ServerSettings
+import com.peaspilaf.copyparty.core.Severity
 import com.peaspilaf.copyparty.core.Share
 import com.peaspilaf.copyparty.core.User
 import com.peaspilaf.copyparty.core.Validator
@@ -27,8 +30,22 @@ class AppViewModel(
     private val server: ServerRuntime,
     val storage: StorageAccess,
 ) {
-    private val _state = MutableStateFlow(store.load())
+    private val initial = store.load()
+    private val _state = MutableStateFlow(initial)
     val state: StateFlow<AppState> = _state.asStateFlow()
+
+    /**
+     * The state the running server was last handed. An edit that changes the rendered config makes
+     * [pendingApply] true, which is the honest "saved, but not live yet" banner: the app never
+     * claims a change took effect while the old server is still serving the old config.
+     */
+    private var appliedState: AppState = initial
+    private val _pendingApply = MutableStateFlow(false)
+    val pendingApply: StateFlow<Boolean> = _pendingApply.asStateFlow()
+
+    /** Why the last "restart to apply" attempt failed, so the banner can say it instead of nothing. */
+    private val _applyError = MutableStateFlow<String?>(null)
+    val applyError: StateFlow<String?> = _applyError.asStateFlow()
 
     val serverStatus: StateFlow<ServerStatus> get() = server.status
 
@@ -36,6 +53,47 @@ class AppViewModel(
         val next = transform(_state.value)
         _state.value = next
         store.save(next)
+        // Only a change that really alters the generated config needs a restart; a theme or an
+        // expert-mode toggle is a screen setting, not a server setting.
+        _pendingApply.value = ConfigRenderer.render(next) != ConfigRenderer.render(appliedState)
+    }
+
+    /**
+     * Hands the saved configuration to the server again, and only clears the banner if it took it.
+     * A runtime that cannot restart at all is reported as a failed start instead of crashing the
+     * screen: the banner staying up is the truth, because the old config is still live.
+     */
+    fun applyIfSupported(): ServerStatus {
+        _applyError.value = null
+
+        // A configuration the validator refuses can never be handed to copyparty. If the only
+        // problem is that nothing is shareable any more (the user deleted the last share), the
+        // honest state is "stopped": leaving the old server running would keep serving a folder
+        // that no longer exists in the app, under a "running" label.
+        val errors = Validator.validate(_state.value).filter { it.severity == Severity.ERROR }
+        if (errors.isNotEmpty()) {
+            val nothingShareable = errors.all { it.path == "shares" }
+            if (nothingShareable && server.status.value is ServerStatus.Running) {
+                server.stop()
+                appliedState = _state.value
+                _pendingApply.value = false
+                return ServerStatus.Stopped
+            }
+            val failure = ServerStatus.Failed(errors.first().message)
+            _applyError.value = failure.message
+            return failure
+        }
+
+        val result = runCatching { server.applyConfig() }.getOrElse { error ->
+            ServerStatus.Failed(error.message ?: "The server could not be restarted.")
+        }
+        if (result !is ServerStatus.Failed) {
+            appliedState = _state.value
+            _pendingApply.value = false
+        } else {
+            _applyError.value = result.message
+        }
+        return result
     }
 
     fun addUser(name: String, password: String) = update { current ->
@@ -84,7 +142,20 @@ class AppViewModel(
 
     fun issues(): List<Issue> = Validator.validate(_state.value)
 
-    fun startServer(): ServerStatus = server.start()
+    /**
+     * Starts the server with the current configuration, so nothing is pending afterwards.
+     *
+     * A start the runtime refuses keeps the banner up: the old server (if one was running) still has
+     * the old config, and pretending the change was live is the lie this banner exists to prevent.
+     */
+    fun startServer(): ServerStatus {
+        val result = server.start()
+        if (result !is ServerStatus.Failed) {
+            appliedState = _state.value
+            _pendingApply.value = false
+        }
+        return result
+    }
 
     fun stopServer() = server.stop()
 
@@ -98,13 +169,17 @@ class AppViewModel(
         return buildString { repeat(length) { append(alphabet[random.nextInt(alphabet.length)]) } }
     }
 
-    /** Grants for a new share default to "nobody" - explicit access is the point of the app. */
+    /**
+     * The share a folder picked in the picker becomes: anyone on the network can open it, so the
+     * very first save produces a working link instead of a folder nobody can see (the shipped bug).
+     * The editor still lets the owner narrow that down before saving.
+     */
     fun newShare(localPath: String, name: String = "Shared folder"): Share = Share(
         id = newShareId(),
         name = name,
         urlPath = suggestUrlPath(name),
         localPath = localPath,
-        grants = listOf(Grant(Grant.EVERYONE, emptySet())),
+        grants = listOf(Grant(Grant.EVERYONE, setOf(Permission.VIEW))),
     )
 
     fun suggestUrlPath(name: String, existing: Collection<String> = _state.value.shares.map { it.urlPath }): String {

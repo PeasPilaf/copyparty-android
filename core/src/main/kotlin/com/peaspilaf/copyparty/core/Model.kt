@@ -49,6 +49,10 @@ data class User(
 /**
  * A folder exposed to the network. [urlPath] is the mountpoint (`photos` -> `/photos`) and
  * [localPath] is the real path on this device.
+ *
+ * [extraVolFlags] is the expert escape hatch: raw copyparty volflags appended to this volume's
+ * `flags:` line (`nodupe, nosub`, ...). It is empty for everyone who never opens expert mode, and a
+ * state file written before expert mode existed loads with it empty.
  */
 @Serializable
 data class Share(
@@ -58,11 +62,19 @@ data class Share(
     val localPath: String,
     val grants: List<Grant> = emptyList(),
     val enabled: Boolean = true,
+    val extraVolFlags: String = "",
 )
 
 @Serializable
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+/**
+ * Global server settings.
+ *
+ * [expertMode] only decides which controls the screens show; it never changes the generated config,
+ * so hiding the expert fields cannot silently drop what the power user already saved. [extraArgs]
+ * holds raw copyparty global directives, one per line, appended to `[global]`.
+ */
 @Serializable
 data class ServerSettings(
     val port: Int = 3923,
@@ -70,6 +82,8 @@ data class ServerSettings(
     val startOnBoot: Boolean = false,
     val serverName: String = "copyparty",
     val theme: ThemeMode = ThemeMode.SYSTEM,
+    val expertMode: Boolean = false,
+    val extraArgs: String = "",
 )
 
 /** Everything the app persists. This is the only state the generated copyparty config derives from. */

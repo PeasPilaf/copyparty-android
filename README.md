@@ -5,12 +5,21 @@ the server, and open them from any browser on the same network. This app turns
 [copyparty](https://github.com/9001/copyparty) into a normal Android app, so you get its resumable
 uploads, WebDAV and per-folder, per-user permissions without a terminal.
 
-* **One tap to serve.** Start the server from the home screen; a notification keeps it running while
+* **One tap to serve.** Add a folder, choose who can open it (or let anyone on your Wi-Fi in), tap
+  start, and the app shows the address and a QR code. A notification keeps the server running while
   you use other apps and tells you where to connect.
 * **Fine-grained sharing.** For every folder choose exactly what each person may do — view,
   download, upload, rename, delete, administer — or make it public to anyone on the network.
-* **Use it from the phone or from a laptop.** The app has a built-in browser for your files, and a
-  QR code so another device can join by scanning instead of typing an address.
+* **Use it from the phone or from a laptop.** The app has a built-in browser for your files, so the
+  phone can browse, download and upload to its own server, and a QR code lets another device join by
+  scanning instead of typing an address.
+* **Honest about what is happening.** If another app is already using the port, or the server cannot
+  start, the app says so, keeps a notification you can tap, and shows the server log — it never says
+  "running" when nothing is serving your files.
+* **Expert mode when you want the real thing.** One switch in Settings reveals the rest of copyparty:
+  the full copyparty web UI in the app, the generated `copyparty.conf` to view, copy or export, raw
+  global arguments, per-folder advanced flags, and a link to the copyparty control panel. Nothing is
+  removed for experts; the everyday screens just stay out of the way.
 * **Small on purpose.** Only the useful parts of copyparty are exposed. No FTP, SFTP, SMB or TFTP,
   no TLS certificate management, no zeroconf. Start it, share a folder, done.
 
@@ -18,12 +27,13 @@ uploads, WebDAV and per-folder, per-user permissions without a terminal.
 
 | Screen | What it is for |
 | --- | --- |
-| Home | Start and stop the server, see its address, open the built-in browser, show the QR code, copy the link, and see why the setup cannot start if it cannot |
-| Shares | Every shared folder, its link, who can open it, and an on/off switch |
-| Share editor | Pick a folder, then tick what each person (or anyone on the network) may do |
-| People | Accounts and passwords (generated for you) that the share rules refer to |
-| Settings | Port, network visibility, start on boot, server name, theme, and the server log |
+| Home | A first-run checklist, start and stop the server, see its address, copy the link, show the QR code, open the built-in browser, import files into the app's folder, and see why the setup cannot start if it cannot |
+| Shares | Every shared folder, its own link, who can open it, and an on/off switch, plus edit and delete |
+| Share editor | Pick a folder (the app's folder, or any folder on the phone), then tick what each person — or anyone on the network — may do |
+| People | Accounts and passwords (generated for you, and changeable later) that the share rules refer to |
+| Settings | Port, network visibility, start on boot, server name, theme, the server log, and Expert mode |
 | Browser | Your files in the built-in browser, with back, reload and open-in-Chrome |
+| Expert | The full copyparty web UI, the rendered config, raw global arguments and per-folder advanced flags |
 
 ## Sharing model
 
@@ -44,13 +54,15 @@ all: a share nobody was granted access to does not appear to anyone.
 ## Your files
 
 * **The app's folder** works out of the box. It is a normal folder on the phone that you can also
-  reach over USB, and it needs no permissions.
+  reach over USB, and it needs no permissions. **Import files** copies things into it so the server
+  always has something to serve.
 * **Any other folder** on the phone can be shared too. Android asks you to allow file access once,
-  after which the app can serve that folder like any other.
+  after which the app can serve that folder like any other, in place — the files are not copied.
 
 The **Play Store build** shares the app's folder only, because Google Play restricts broad storage
 access. The **self-hosted build** (GitHub Releases / F-Droid) can additionally serve any folder on
-the phone directly.
+the phone directly. Both builds have every screen, Expert mode included; only the storage reach
+differs.
 
 ## Install
 

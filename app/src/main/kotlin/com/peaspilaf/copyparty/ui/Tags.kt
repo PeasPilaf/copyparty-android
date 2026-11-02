@@ -7,7 +7,8 @@ import com.peaspilaf.copyparty.core.ThemeMode
  * The testTags this UI puts on its controls.
  *
  * `UiTags` in the unit tests is the same vocabulary from the test side; keeping it here as well
- * means a screen cannot quietly rename a control without the matching test failing.
+ * means a screen cannot quietly rename a control without the matching test failing. Every value is
+ * the literal string the journeys use, so the emulator tests and the unit tests agree.
  */
 internal object Tags {
     // Shell
@@ -22,42 +23,91 @@ internal object Tags {
     const val ScreenSettings = "screen-settings"
 
     // Home
-    const val StartServer = "start-server"
-    const val StopServer = "stop-server"
+    const val HomeStart = "home-start"
+    const val HomeStop = "home-stop"
+    const val HomeAddress = "home-address"
+    const val HomeCopy = "home-copy"
+    const val HomeQr = "home-qr"
+    const val HomeBrowse = "home-browse"
+    const val HomeServerLog = "home-server-log"
+    const val ExpertEntry = "expert-entry"
+    const val ImportFiles = "import-files"
+    const val FirstRunChecklist = "first-run-checklist"
+    const val FirstRunChooseFolder = "first-run-choose-folder"
+    const val HomeRestartToApply = "home-restart-to-apply"
     const val ServerStatus = "server-status"
-    const val ServerUrl = "server-url"
     const val ValidationBanner = "validation-banner"
+
+    // Storage access
+    const val StorageGrant = "storage-grant"
+
+    // Folder picker
+    const val FolderPicker = "folder-picker"
+    const val PickerRootApp = "picker-root-app"
+    const val PickerRootPhone = "picker-root-phone"
+    const val PickerBreadcrumb = "picker-breadcrumb"
+    const val PickerUp = "picker-up"
+    const val PickerSelect = "picker-select"
+    const val PickerUnreadable = "picker-unreadable"
+    const val PickerEmpty = "picker-empty"
+
+    fun pickerFolder(name: String): String = "picker-folder-$name"
 
     // Shares
     const val AddShare = "add-share"
+    const val EmptyAddShare = "empty-add-share"
     const val ShareRow = "share-row"
     const val ShareName = "share-name"
-    const val SharePath = "share-path"
+    const val ShareUrl = "share-url"
     const val ShareAccess = "share-access"
     const val ShareEnabled = "share-enabled"
     const val ShareEdit = "share-edit"
-    const val FolderPicker = "folder-picker"
-    const val FolderSelect = "folder-select"
+    const val ShareCopy = "share-copy"
+    const val ShareSend = "share-send"
+    const val ShareDelete = "share-delete"
+    const val ShareDeleteDialog = "share-delete-dialog"
+    const val ShareDeleteConfirm = "share-delete-confirm"
+    const val ShareDeleteCancel = "share-delete-cancel"
 
     // Share editor
     const val ShareEditor = "share-editor"
     const val ShareEditorBack = "share-editor-back"
     const val ShareEditorSave = "share-editor-save"
     const val ShareLinkField = "share-link-field"
+    const val EditorFolder = "editor-folder"
+    const val EditorChangeFolder = "editor-change-folder"
+    const val EditorNoAccess = "editor-no-access"
+    const val EditorDelete = "editor-delete"
+    const val EditorDeleteDialog = "editor-delete-dialog"
+    const val EditorDeleteConfirm = "editor-delete-confirm"
+    const val EditorDeleteCancel = "editor-delete-cancel"
+    const val PresetAnyoneView = "preset-anyone-view"
+    const val PresetPeople = "preset-people"
+    const val PresetDropbox = "preset-dropbox"
     const val AnyoneOnNetwork = "anyone-on-network"
     const val ShareIssues = "share-issues"
 
+    fun permission(principal: String, permission: Permission): String =
+        "permission-$principal-${permission.name}"
+
     // People
     const val AddPerson = "add-person"
+    const val EmptyAddPerson = "empty-add-person"
     const val PersonDialog = "person-dialog"
     const val PersonNameField = "person-name-field"
-    const val PersonPasswordField = "person-password-field"
+    const val PersonPassword = "person-password"
+    const val PersonGenerate = "person-generate"
+    const val PersonPasswordReveal = "person-password-reveal"
     const val PersonSave = "person-save"
+    const val PersonRow = "person-row"
+    const val PersonEdit = "person-edit"
+    const val DeletePersonDialog = "delete-person-dialog"
+    const val DeletePersonConfirm = "delete-person-confirm"
+    const val DeletePersonCancel = "delete-person-cancel"
+
+    fun deletePerson(name: String): String = "delete-person-$name"
 
     // Connect: in-app browser and QR code
-    const val OpenBrowser = "open-browser"
-    const val ShowQr = "show-qr"
-    const val CopyUrl = "copy-url"
     const val ScreenQr = "screen-qr"
     const val QrBack = "qr-back"
     const val QrImage = "qr-image"
@@ -77,13 +127,8 @@ internal object Tags {
     const val SettingsServerName = "settings-server-name"
     const val SettingsSave = "settings-save"
     const val SettingsErrors = "settings-errors"
-
-    fun permission(principal: String, permission: Permission): String =
-        "permission-$principal-${permission.name}"
-
-    fun personRow(name: String): String = "person-row-$name"
-
-    fun deletePerson(name: String): String = "delete-person-$name"
+    const val ExpertToggle = "expert-toggle"
+    const val SettingsExpert = "settings-expert"
 
     fun themeOption(mode: ThemeMode): String = "theme-${mode.name}"
 }

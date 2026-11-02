@@ -20,14 +20,25 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.peaspilaf.copyparty.data.StorageAccess
 import java.io.File
 
 /**
- * Picks the folder a new share is rooted in. Starts in the app's own share folder (always writable,
- * no permission needed) and can walk into subfolders from there.
+ * Picks the folder a share is rooted in.
+ *
+ * It starts at a chooser of places instead of one hardcoded folder: the app's own folder (always
+ * there, no permission needed) and, on the self-hosted build once All files access is granted, the
+ * phone's shared storage. The access state is re-read every time the screen resumes, so granting in
+ * system settings is reflected when the user comes back - no restart, no stuck picker.
+ *
+ * An empty folder and a folder the app cannot read are different things, and the screen says which
+ * one it is: "No subfolders here" is not an error, but "This folder cannot be opened" is, and it
+ * keeps the route back to granting access on screen.
  */
 @Composable
 internal fun FolderPickerScreen(
@@ -35,10 +46,23 @@ internal fun FolderPickerScreen(
     onSelect: (File) -> Unit,
     onCancel: () -> Unit,
 ) {
-    val root = remember(storage) { storage.appShareRoot() }
-    var current by remember(root) { mutableStateOf(root) }
-    val folders = runCatching { storage.listFolders(current) }.getOrDefault(emptyList())
-    val up: File? = current.parentFile
+    val context = LocalContext.current
+    var accessGranted by remember(storage) { mutableStateOf(storage.hasAllFilesAccess()) }
+    var roots by remember(storage) { mutableStateOf(storage.browseRoots()) }
+
+    // Coming back from the system "All files access" screen must change the picker immediately.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        accessGranted = storage.hasAllFilesAccess()
+        roots = storage.browseRoots()
+    }
+
+    val appRoot = remember(storage) { storage.appShareRoot() }
+    var rootPath by remember(storage) { mutableStateOf<String?>(null) }
+    var currentPath by remember(storage) { mutableStateOf<String?>(null) }
+
+    val selectedRoot = rootPath?.let { File(it) }
+    val current = currentPath?.let { File(it) }
+    val listing = current?.let { folder -> runCatching { storage.listFolders(folder) } }
 
     Column(
         modifier = Modifier
@@ -55,54 +79,131 @@ internal fun FolderPickerScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = "Folder",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(text = current.absolutePath, style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Button(
-                onClick = { onSelect(current) },
-                modifier = Modifier.weight(1f).testTag(Tags.FolderSelect),
-            ) {
-                Text("Use this folder")
-            }
-            if (up != null && current.absolutePath != root.absolutePath) {
-                OutlinedButton(
-                    onClick = { current = up },
-                    modifier = Modifier.weight(1f),
+        if (!storage.supportsExternalFolders) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text("Up")
+                    Text(
+                        text = "Only the app's folder",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = "This build can share only the app's own folder. The self-hosted " +
+                            "build can share any folder.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = "Use Add files on Home to copy documents into it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
 
-        Text(text = "Subfolders", style = MaterialTheme.typography.titleMedium)
-        if (folders.isEmpty()) {
-            Text(
-                text = "No subfolders here.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        if (storage.supportsExternalFolders && !accessGranted) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "Share folders on this phone",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = "Allow access to all files once and this picker can open any folder " +
+                            "on the phone, in place - the files are not copied.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(
+                        onClick = {
+                            runCatching { context.startActivity(storage.allFilesAccessIntent()) }
+                        },
+                        modifier = Modifier.testTag(Tags.StorageGrant),
+                    ) {
+                        Text("Allow access to all files")
+                    }
+                }
+            }
         }
-        for (folder in folders) {
-            OutlinedButton(
-                onClick = { current = folder },
+
+        if (selectedRoot == null || current == null) {
+            RootChooser(
+                roots = roots,
+                appRoot = appRoot,
+                onOpenRoot = { root ->
+                    rootPath = root.absolutePath
+                    currentPath = root.absolutePath
+                },
+            )
+        } else {
+            Breadcrumb(root = selectedRoot, current = current, appRoot = appRoot)
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(folder.name)
+                Button(
+                    onClick = { onSelect(current) },
+                    modifier = Modifier.weight(1f).testTag(Tags.PickerSelect),
+                ) {
+                    Text("Use this folder")
+                }
+                OutlinedButton(
+                    onClick = {
+                        if (current.absolutePath == selectedRoot.absolutePath) {
+                            rootPath = null
+                            currentPath = null
+                        } else {
+                            currentPath = current.parentFile?.absolutePath ?: selectedRoot.absolutePath
+                        }
+                    },
+                    modifier = Modifier.weight(1f).testTag(Tags.PickerUp),
+                ) {
+                    Text("Up")
+                }
+            }
+
+            Text(text = "Subfolders", style = MaterialTheme.typography.titleMedium)
+            val folders = listing?.getOrNull()
+            val unreadable = listing?.isFailure == true
+            when {
+                unreadable -> Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "This folder cannot be opened.",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag(Tags.PickerUnreadable),
+                    )
+                    Text(
+                        text = if (storage.supportsExternalFolders && !accessGranted) {
+                            "Allow access to all files above, then come back to this folder."
+                        } else {
+                            "The app does not have permission to read it. Pick another folder."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                folders.isNullOrEmpty() -> Text(
+                    text = "No subfolders here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag(Tags.PickerEmpty),
+                )
+                else -> for (folder in folders) {
+                    OutlinedButton(
+                        onClick = { currentPath = folder.absolutePath },
+                        modifier = Modifier.fillMaxWidth().testTag(Tags.pickerFolder(folder.name)),
+                    ) {
+                        Text(folder.name)
+                    }
+                }
             }
         }
 
@@ -110,4 +211,51 @@ internal fun FolderPickerScreen(
             Text("Cancel")
         }
     }
+}
+
+@Composable
+private fun RootChooser(
+    roots: List<File>,
+    appRoot: File,
+    onOpenRoot: (File) -> Unit,
+) {
+    Text(text = "Where are the files?", style = MaterialTheme.typography.titleMedium)
+    for (root in roots) {
+        val isApp = root.absolutePath == appRoot.absolutePath
+        val label = if (isApp) "App folder" else "This phone"
+        val tag = if (isApp) Tags.PickerRootApp else Tags.PickerRootPhone
+        OutlinedButton(
+            onClick = { onOpenRoot(root) },
+            modifier = Modifier.fillMaxWidth().testTag(tag),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(text = label, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = if (isApp) {
+                        "Always available. Needs no permission."
+                    } else {
+                        "Internal storage. Every folder on the phone."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+/** "App folder / Photos": the human where-am-I line, not a filesystem path. */
+@Composable
+private fun Breadcrumb(root: File, current: File, appRoot: File) {
+    val rootLabel = if (root.absolutePath == appRoot.absolutePath) "App folder" else "This phone"
+    val relative = current.absolutePath
+        .removePrefix(root.absolutePath)
+        .trim('/')
+        .split('/')
+        .filter { it.isNotEmpty() }
+    val text = (listOf(rootLabel) + relative).joinToString(" / ")
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.testTag(Tags.PickerBreadcrumb),
+    )
 }

@@ -32,6 +32,16 @@ object ConfigRenderer {
             out.append("  lo: ").append(sanitizeInline(logPath)).append('\n')
             out.append("  flo: 2\n")
         }
+        // Expert mode: the raw global directives a power user typed, one per line, in the order they
+        // wrote them. A `[section]` line is dropped outright so a pasted value can never open a new
+        // section and change an unrelated part of the file - the Validator refuses such a state
+        // before it gets here, so this is the second lock on the same door.
+        for (line in state.settings.extraArgs.lines()) {
+            val directive = sanitizeDirective(line)
+            if (directive.isNotEmpty() && !directive.startsWith("[")) {
+                out.append("  ").append(directive).append('\n')
+            }
+        }
         out.append('\n')
 
         val users = state.users
@@ -59,10 +69,14 @@ object ConfigRenderer {
                     out.append("    ").append(flags).append(": ").append(principal).append('\n')
                 }
             }
-            if (share.grants.any { Permission.UPLOAD in it.permissions }) {
-                // e2d enables the upload database: resumable uploads, dedupe and upload-undo.
+            // The volume's flags are one block with one value line. `e2d` is the upload database
+            // (resumable uploads, dedupe, upload-undo) and is only added where somebody may upload;
+            // the expert volflags follow it, comma separated, in the order they were written.
+            // copyparty rejects an inline `flags: e2d, ...` line, so the block form is the only one.
+            val flags = volumeFlags(share)
+            if (flags.isNotEmpty()) {
                 out.append("  flags:\n")
-                out.append("    e2d\n")
+                out.append("    ").append(flags.joinToString(", ")).append('\n')
             }
             out.append('\n')
         }
@@ -90,6 +104,33 @@ object ConfigRenderer {
         return flags.toString()
     }
 
+    /**
+     * The one value line of a volume's `flags:` block: `e2d` when somebody may upload, then the
+     * expert's raw volflags. Empty when there is nothing to write, which keeps the block out of the
+     * file entirely. A `[section]` token is dropped for the same reason as in [render].
+     */
+    fun volumeFlags(share: Share): List<String> {
+        val flags = mutableListOf<String>()
+        if (share.grants.any { Permission.UPLOAD in it.permissions }) flags += "e2d"
+        for (token in share.extraVolFlags.split(',')) {
+            val flag = sanitizeDirective(token)
+            // Flags are a single line, so a token that smuggled in a line break is split again and
+            // each part is judged on its own; a `[` part would be a section header.
+            for (part in flag.lines()) {
+                val candidate = part.trim()
+                if (candidate.isNotEmpty() && !candidate.startsWith("[")) flags += candidate
+            }
+        }
+        return flags.distinct()
+    }
+
     /** Config files are line based, so values may never contain a line break. */
     private fun sanitizeInline(value: String): String = value.replace('\n', ' ').replace('\r', ' ')
+
+    /**
+     * One raw config line from the expert fields: control characters are removed (a paste can carry
+     * them) and the ends are trimmed, so what lands in the file is exactly one harmless line.
+     */
+    private fun sanitizeDirective(value: String): String =
+        value.filterNot { it.isISOControl() }.trim()
 }

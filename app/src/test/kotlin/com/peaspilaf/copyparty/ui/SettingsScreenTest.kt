@@ -18,9 +18,10 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * The Settings screen promise: the handful of knobs that change how the server behaves are edited
- * in one form and saved as one change. A value the server could not start with is pointed at and
- * never written to disk.
+ * The Settings promise: the handful of knobs that change how the server behaves are edited in one
+ * form and saved as one change. A value the server could not start with is pointed at and never
+ * written to disk. Expert mode is the one switch that takes effect at once, because it is the door
+ * to the advanced tools rather than part of the server's config.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34], qualifiers = "w411dp-h891dp")
@@ -31,21 +32,21 @@ class SettingsScreenTest {
 
     private val alice = User("alice", "hunter2")
 
-    private fun openSettings(): FakeConfigStore {
-        val store = FakeConfigStore(
-            AppState(
-                users = listOf(alice),
-                shares = listOf(
-                    Share(
-                        id = "s1",
-                        name = "Photos",
-                        urlPath = "photos",
-                        localPath = "/storage/photos",
-                        grants = listOf(Grant("alice", setOf(Permission.VIEW))),
-                    ),
-                ),
+    private val state = AppState(
+        users = listOf(alice),
+        shares = listOf(
+            Share(
+                id = "s1",
+                name = "Photos",
+                urlPath = "photos",
+                localPath = "/storage/photos",
+                grants = listOf(Grant("alice", setOf(Permission.VIEW))),
             ),
-        )
+        ),
+    )
+
+    private fun openSettings(initial: AppState = state): FakeConfigStore {
+        val store = FakeConfigStore(initial)
         compose.setContent {
             CopypartyTheme(themeMode = ThemeMode.LIGHT) {
                 AppRoot(testViewModel(store = store))
@@ -87,5 +88,40 @@ class SettingsScreenTest {
         compose.onTag(UiTags.SettingsErrors).assertExists()
         compose.assertTextShown("Port must be between")
         assertThat(store.saves).isEmpty()
+    }
+
+    @Test
+    fun `turning expert mode on saves it and opens the expert tools`() {
+        val store = openSettings()
+
+        compose.tap(UiTags.ExpertToggle)
+
+        assertThat(store.state.settings.expertMode).isTrue()
+        // Owned by the native-expert region: the config view inside ExpertScreen.
+        compose.onTag(EXPERT_CONFIG).assertExists()
+    }
+
+    @Test
+    fun `the expert tools entry opens the expert screen`() {
+        openSettings(state.copy(settings = ServerSettings(expertMode = true)))
+
+        compose.onTag(UiTags.SettingsExpert).assertExists()
+        compose.tap(UiTags.SettingsExpert)
+
+        compose.onTag(EXPERT_CONFIG).assertExists()
+    }
+
+    @Test
+    fun `expert mode adds an expert tools entry on Home`() {
+        openSettings(state.copy(settings = ServerSettings(expertMode = true)))
+
+        compose.tap(UiTags.NavHome)
+
+        compose.onTag(UiTags.ExpertEntry).assertExists()
+    }
+
+    private companion object {
+        /** The testTag the native-expert region puts on ExpertScreen's config view. */
+        const val EXPERT_CONFIG = "expert-config"
     }
 }

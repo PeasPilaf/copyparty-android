@@ -161,4 +161,43 @@ class ValidatorTest {
         val state = validState().copy(shares = listOf(share))
         assertThat(paths(errors(state))).containsExactly("shares[0].localPath")
     }
+
+    // -- Expert mode ---------------------------------------------------------------------------
+    // Expert mode hands the user raw copyparty config lines, so the Validator is the guard that a
+    // pasted line cannot start a new section and change an unrelated part of the file.
+
+    @Test
+    fun `a section header in expert args is refused`() {
+        for (args in listOf("[evil]", "  [evil]", "--dedup\n[evil]")) {
+            val state = validState().copy(settings = ServerSettings(extraArgs = args))
+            assertThat(paths(errors(state))).contains("settings.extraArgs")
+        }
+    }
+
+    @Test
+    fun `a control character in expert args is refused`() {
+        for (args in listOf("--dedup\u0007", "--dedup\n\u0000no-dupe")) {
+            val state = validState().copy(settings = ServerSettings(extraArgs = args))
+            assertThat(paths(errors(state))).contains("settings.extraArgs")
+        }
+    }
+
+    @Test
+    fun `a section header or a line break in advanced folder flags is refused`() {
+        for (flags in listOf("[evil]", "nodupe\n[evil]", "e2d\u0000")) {
+            val share = validState().shares[0].copy(extraVolFlags = flags)
+            val state = validState().copy(shares = listOf(share))
+            assertThat(paths(errors(state))).contains("shares[0].extraVolFlags")
+        }
+    }
+
+    @Test
+    fun `ordinary expert values are accepted`() {
+        val state = validState().copy(
+            settings = ServerSettings(extraArgs = "--dedup\n--no-dupe"),
+            shares = listOf(validState().shares[0].copy(extraVolFlags = "nodupe, nosub")),
+        )
+
+        assertThat(Validator.validate(state)).isEmpty()
+    }
 }

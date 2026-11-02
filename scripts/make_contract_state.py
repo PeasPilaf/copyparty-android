@@ -46,6 +46,9 @@ def main() -> int:
                 "localPath": public,
                 "enabled": True,
                 "grants": [{"principal": "*", "permissions": ["VIEW"]}],
+                # Expert surface: per-volume advanced flags must survive the renderer and remain
+                # accepted by the real server the contract job boots.
+                "extraVolFlags": "nodupe",
             },
             {
                 "id": "private",
@@ -70,6 +73,9 @@ def main() -> int:
             "startOnBoot": False,
             "serverName": "contract-test",
             "theme": "SYSTEM",
+            # Expert surface: raw global directives are appended to [global] and must boot.
+            "expertMode": True,
+            "extraArgs": "--no-logues",
         },
     }
     json.dump(state, sys.stdout, indent=2)

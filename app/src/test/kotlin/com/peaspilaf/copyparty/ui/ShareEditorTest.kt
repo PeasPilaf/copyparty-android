@@ -3,6 +3,8 @@ package com.peaspilaf.copyparty.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performTextClearance
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -22,7 +24,8 @@ import org.robolectric.annotation.Config
 /**
  * The share editor promise: permissions are per person, "anyone on the network" is one switch, and
  * what you tick is exactly what the generated copyparty config will contain. A share that cannot
- * work (unknown person, unusable link path) says so while you are editing it.
+ * work (unknown person, unusable link path, nobody allowed in) says so while you are editing it,
+ * and the folder a share is rooted in can be seen and changed without losing the grants.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34], qualifiers = "w411dp-h891dp")
@@ -41,21 +44,43 @@ class ShareEditorTest {
         grants = listOf(Grant("alice", emptySet())),
     )
 
-    private fun show(viewModel: AppViewModel) {
+    private fun show(store: FakeConfigStore, storage: FakeStorageAccess = FakeStorageAccess()) {
         compose.setContent {
             CopypartyTheme(themeMode = ThemeMode.LIGHT) {
-                AppRoot(viewModel)
+                AppRoot(testViewModel(store = store, storage = storage))
             }
         }
     }
 
-    private fun openEditor(state: AppState): FakeConfigStore {
+    private fun openEditor(
+        state: AppState,
+        storage: FakeStorageAccess = FakeStorageAccess(),
+    ): FakeConfigStore {
         val store = FakeConfigStore(state)
-        show(testViewModel(store = store))
+        show(store, storage)
         compose.tap(UiTags.NavShares)
-        compose.tap(UiTags.ShareEdit)
+        compose.tapInRow(UiTags.ShareRow, state.shares.single().name, UiTags.ShareEdit)
         compose.onTag(UiTags.ShareEditor).assertIsDisplayed()
         return store
+    }
+
+    private fun folderShown(path: String) = compose.onNode(
+        hasTestTag(UiTags.EditorFolder) and hasText(path, substring = true),
+        useUnmergedTree = true,
+    )
+
+    @Test
+    fun `a draft with an unusable link path is refused instead of saved`() {
+        val store = openEditor(AppState(users = listOf(alice), shares = listOf(share)))
+
+        compose.onTag(UiTags.ShareLinkField).performTextClearance()
+        compose.tap(UiTags.ShareEditorSave)
+        compose.waitForIdle()
+
+        // The store still has the old, valid path and the editor is still open: saving a broken
+        // share would give the server a config it cannot start with.
+        assertThat(store.state.shares.single().urlPath).isEqualTo("photos")
+        compose.onTag(UiTags.ShareEditor).assertIsDisplayed()
     }
 
     @Test
@@ -126,17 +151,121 @@ class ShareEditorTest {
     }
 
     @Test
+    fun `the editor shows which folder the share is rooted in`() {
+        openEditor(AppState(users = listOf(alice), shares = listOf(share)))
+
+        folderShown("/storage/photos").assertExists()
+    }
+
+    @Test
+    fun `changing the folder keeps the existing grants`() {
+        val storage = FakeStorageAccess()
+        val store = openEditor(
+            AppState(users = listOf(alice), shares = listOf(share.copy(grants = emptyList()))),
+            storage,
+        )
+        compose.tap(UiTags.permission("alice", Permission.VIEW))
+
+        compose.tap(UiTags.EditorChangeFolder)
+        compose.tap(UiTags.PickerRootApp)
+        compose.tap(UiTags.PickerSelect)
+        folderShown(storage.appRoot.absolutePath).assertExists()
+        compose.tap(UiTags.ShareEditorSave)
+
+        val saved = store.state.shares.single()
+        assertThat(saved.localPath).isEqualTo(storage.appRoot.absolutePath)
+        assertThat(saved.grants).containsExactly(Grant("alice", setOf(Permission.VIEW)))
+    }
+
+    @Test
+    fun `saving a share that lets nobody in is blocked and explained`() {
+        val store = openEditor(
+            AppState(users = listOf(alice), shares = listOf(share.copy(grants = emptyList()))),
+        )
+
+        compose.tap(UiTags.ShareEditorSave)
+
+        compose.onTag(UiTags.EditorNoAccess).assertExists()
+        compose.onTag(UiTags.ShareEditor).assertExists()
+        assertThat(store.state.shares.single().grants).isEmpty()
+    }
+
+    @Test
+    fun `the Anyone can view preset gives everyone read access`() {
+        val store = openEditor(
+            AppState(users = listOf(alice), shares = listOf(share.copy(grants = emptyList()))),
+        )
+
+        compose.tap(UiTags.PresetAnyoneView)
+        compose.tap(UiTags.ShareEditorSave)
+
+        assertThat(store.state.shares.single().grants)
+            .containsExactly(Grant(Grant.EVERYONE, setOf(Permission.VIEW)))
+    }
+
+    @Test
+    fun `the dropbox preset lets anyone upload`() {
+        val store = openEditor(
+            AppState(users = listOf(alice), shares = listOf(share.copy(grants = emptyList()))),
+        )
+
+        compose.tap(UiTags.PresetDropbox)
+        compose.tap(UiTags.ShareEditorSave)
+
+        assertThat(store.state.shares.single().grants)
+            .containsExactly(Grant(Grant.EVERYONE, setOf(Permission.UPLOAD)))
+    }
+
+    @Test
+    fun `choosing only the people I choose drops the anonymous grant`() {
+        val shareWithEveryone = share.copy(
+            grants = listOf(
+                Grant(Grant.EVERYONE, setOf(Permission.VIEW)),
+                Grant("alice", setOf(Permission.VIEW)),
+            ),
+        )
+        val store = openEditor(AppState(users = listOf(alice), shares = listOf(shareWithEveryone)))
+
+        compose.tap(UiTags.PresetPeople)
+        compose.tap(UiTags.ShareEditorSave)
+
+        assertThat(store.state.shares.single().grants)
+            .containsExactly(Grant("alice", setOf(Permission.VIEW)))
+    }
+
+    @Test
     fun `picking the app folder creates a share rooted in that folder`() {
         val storage = FakeStorageAccess()
         val store = FakeConfigStore(AppState())
-        show(testViewModel(store = store, storage = storage))
+        show(store, storage)
 
         compose.tap(UiTags.NavShares)
         compose.tap(UiTags.AddShare)
-        compose.tap(UiTags.FolderSelect)
-        compose.onTag(UiTags.ShareEditor).assertIsDisplayed()
+        compose.tap(UiTags.PickerRootApp)
+        compose.tap(UiTags.PickerSelect)
+        compose.onTag(UiTags.ShareEditor).assertExists()
+        compose.tap(UiTags.PresetAnyoneView)
         compose.tap(UiTags.ShareEditorSave)
 
         assertThat(store.state.shares.single().localPath).isEqualTo(storage.appRoot.absolutePath)
+    }
+
+    @Test
+    fun `a folder picked from the picker is a share anyone on the network can open straight away`() {
+        // A novice picks a folder, taps Save and has a working link: the share must not be saved with
+        // nobody granted, because then it would be invisible on the server (the shipped bug).
+        val storage = FakeStorageAccess()
+        val store = FakeConfigStore(AppState())
+        show(store, storage)
+
+        compose.tap(UiTags.NavShares)
+        compose.tap(UiTags.AddShare)
+        compose.tap(UiTags.PickerRootApp)
+        compose.tap(UiTags.PickerSelect)
+        compose.tap(UiTags.ShareEditorSave)
+
+        val saved = store.state.shares.single()
+        assertThat(saved.localPath).isEqualTo(storage.appRoot.absolutePath)
+        assertThat(saved.grants).containsExactly(Grant(Grant.EVERYONE, setOf(Permission.VIEW)))
     }
 }

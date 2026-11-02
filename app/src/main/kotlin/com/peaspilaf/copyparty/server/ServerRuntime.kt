@@ -17,6 +17,16 @@ interface ServerRuntime {
     val status: StateFlow<ServerStatus>
     fun start(): ServerStatus
     fun stop()
+
+    /**
+     * Re-render the config from the current store and restart the server so an edit takes effect.
+     *
+     * The status is told the truth: `Stopping` while the old server goes away, `Starting` once the
+     * restart was handed to the service, then whatever the service reports. Calling it while the
+     * server is stopped simply starts it; a configuration that cannot work is refused without
+     * touching the running server. Safe to call twice.
+     */
+    fun applyConfig(): ServerStatus
 }
 
 /**

@@ -20,7 +20,7 @@ import org.robolectric.annotation.Config
 /**
  * The People screen promise: the people who can log in to your phone's file server are a short,
  * editable list. Adding someone is a name and a password; removing someone also removes what they
- * were allowed to touch.
+ * were allowed to touch, after a confirmation.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34], qualifiers = "w411dp-h891dp")
@@ -61,12 +61,12 @@ class PeopleScreenTest {
         compose.tap(UiTags.AddPerson)
         compose.onTag(UiTags.PersonDialog).assertIsDisplayed()
         compose.onTag(UiTags.PersonNameField).performTextInput("carol")
-        compose.onTag(UiTags.PersonPasswordField).performTextInput("s3cret")
+        compose.onTag(UiTags.PersonPassword).performTextInput("s3cret")
         compose.tap(UiTags.PersonSave)
 
         assertThat(store.state.users).contains(User("carol", "s3cret"))
         compose.onTag(UiTags.PersonDialog).assertDoesNotExist()
-        compose.onTag(UiTags.personRow("carol")).assertIsDisplayed()
+        compose.onTagInRow(UiTags.PersonRow, "carol", UiTags.PersonEdit).assertExists()
     }
 
     @Test
@@ -75,7 +75,7 @@ class PeopleScreenTest {
 
         compose.tap(UiTags.AddPerson)
         compose.onTag(UiTags.PersonNameField).performTextInput("alice")
-        compose.onTag(UiTags.PersonPasswordField).performTextInput("hunter3")
+        compose.onTag(UiTags.PersonPassword).performTextInput("hunter3")
         compose.tap(UiTags.PersonSave)
 
         compose.assertTextShown("Duplicate user name")
@@ -88,6 +88,7 @@ class PeopleScreenTest {
         val store = openPeople(AppState(users = listOf(alice, bob), shares = listOf(shared)))
 
         compose.tap(UiTags.deletePerson("alice"))
+        compose.tap(UiTags.DeletePersonConfirm)
 
         assertThat(store.state.users).containsExactly(bob)
         assertThat(store.state.shares.single().grants)

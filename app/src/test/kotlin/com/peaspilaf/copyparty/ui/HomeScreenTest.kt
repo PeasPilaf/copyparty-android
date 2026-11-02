@@ -1,14 +1,25 @@
 package com.peaspilaf.copyparty.ui
 
+import android.Manifest
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.ActivityResultRegistryOwner
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import com.peaspilaf.copyparty.core.AppState
+import com.peaspilaf.copyparty.core.Grant
+import com.peaspilaf.copyparty.core.Permission
 import com.peaspilaf.copyparty.core.ServerSettings
+import com.peaspilaf.copyparty.core.Share
 import com.peaspilaf.copyparty.core.ThemeMode
 import com.peaspilaf.copyparty.server.ServerStatus
 import com.peaspilaf.copyparty.ui.theme.CopypartyTheme
@@ -28,6 +39,14 @@ class HomeScreenTest {
     @get:Rule
     val compose = createComposeRule()
 
+    private val photos = Share(
+        id = "s1",
+        name = "Photos",
+        urlPath = "photos",
+        localPath = "/storage/photos",
+        grants = listOf(Grant(Grant.EVERYONE, setOf(Permission.VIEW))),
+    )
+
     private fun show(viewModel: AppViewModel) {
         compose.setContent {
             CopypartyTheme(themeMode = ThemeMode.LIGHT) {
@@ -40,15 +59,15 @@ class HomeScreenTest {
     fun `a stopped server offers a start control`() {
         show(testViewModel(server = FakeServerRuntime(ServerStatus.Stopped)))
 
-        compose.onTag(UiTags.StartServer).assertIsDisplayed()
+        compose.onTag(UiTags.HomeStart).assertIsDisplayed()
     }
 
     @Test
     fun `tapping start asks the runtime to start the server`() {
         val server = FakeServerRuntime(ServerStatus.Stopped)
-        show(testViewModel(server = server))
+        show(testViewModel(store = FakeConfigStore(AppState(shares = listOf(photos))), server = server))
 
-        compose.tap(UiTags.StartServer)
+        compose.tap(UiTags.HomeStart)
 
         assertThat(server.startCalls).isEqualTo(1)
     }
@@ -59,9 +78,9 @@ class HomeScreenTest {
         show(testViewModel(server = FakeServerRuntime(ServerStatus.Running(listOf(url), 3923))))
 
         compose
-            .onNode(hasTestTag(UiTags.ServerUrl) and hasText(url, substring = true), useUnmergedTree = true)
+            .onNode(hasTestTag(UiTags.HomeAddress) and hasText(url, substring = true), useUnmergedTree = true)
             .assertExists()
-        compose.onTag(UiTags.StopServer).assertIsDisplayed()
+        compose.onTag(UiTags.HomeStop).assertIsDisplayed()
     }
 
     @Test
@@ -77,6 +96,44 @@ class HomeScreenTest {
 
         compose.onTag(UiTags.ValidationBanner).assertIsDisplayed()
         compose.assertTextShown("Port must be between")
-        compose.onTag(UiTags.StartServer).assertIsNotEnabled()
+        compose.onTag(UiTags.HomeStart).assertIsNotEnabled()
+    }
+
+    @Test
+    fun `starting the server asks to show the server notification`() {
+        // From Android 13 a foreground service is silent unless POST_NOTIFICATIONS was asked for, so
+        // the start button is the one control that must ask (`rememberNotificationPermissionRequester`).
+        val requested = mutableListOf<String>()
+        val registry = object : ActivityResultRegistry() {
+            override fun <I, O> onLaunch(
+                requestCode: Int,
+                contract: ActivityResultContract<I, O>,
+                input: I,
+                options: ActivityOptionsCompat?,
+            ) {
+                if (contract is ActivityResultContracts.RequestPermission) requested += input as String
+            }
+        }
+        val server = FakeServerRuntime(ServerStatus.Stopped)
+        val viewModel = testViewModel(
+            store = FakeConfigStore(AppState(shares = listOf(photos))),
+            server = server,
+        )
+        compose.setContent {
+            CompositionLocalProvider(
+                LocalActivityResultRegistryOwner provides object : ActivityResultRegistryOwner {
+                    override val activityResultRegistry: ActivityResultRegistry = registry
+                },
+            ) {
+                CopypartyTheme(themeMode = ThemeMode.LIGHT) {
+                    AppRoot(viewModel)
+                }
+            }
+        }
+
+        compose.tap(UiTags.HomeStart)
+
+        assertThat(requested).containsExactly(Manifest.permission.POST_NOTIFICATIONS)
+        assertThat(server.startCalls).isEqualTo(1)
     }
 }
