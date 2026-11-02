@@ -35,6 +35,10 @@ class ServerService : Service() {
     @Volatile
     private var stopping = false
 
+    /** True once the service has handled its own stop/fail path, so onDestroy does not stop twice. */
+    @Volatile
+    private var shutdownHandled = false
+
     /** Identifies the current boot attempt; an older attempt must not report state or notifications. */
     @Volatile
     private var generation = 0
@@ -169,6 +173,7 @@ class ServerService : Service() {
     private suspend fun shutdown(attempt: Int) {
         if (attempt != generation) return
         stopping = true
+        shutdownHandled = true
         val current = ServerState.status.value
         if (current is ServerStatus.Running || current is ServerStatus.Starting) {
             ServerState.set(ServerStatus.Stopping)
@@ -204,6 +209,7 @@ class ServerService : Service() {
      * user has to be able to see *why* the server is not there. A stale attempt says nothing.
      */
     private fun fail(message: String, attempt: Int) {
+        shutdownHandled = true
         if (isStale(attempt)) return
         ServerState.set(ServerStatus.Failed(message))
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)

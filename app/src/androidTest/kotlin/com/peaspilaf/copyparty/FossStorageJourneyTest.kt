@@ -93,7 +93,8 @@ class FossStorageJourneyTest {
         mark(context, "teardown: stopping server")
         stopTheServer()
         mark(context, "teardown: done")
-        shell("appops set ${context.packageName} MANAGE_EXTERNAL_STORAGE deny")
+        // Deliberately no appops revoke here: revoking All files access on a live process is not what
+        // this journey tests, and UTP uninstalls the app after the run anyway.
     }
 
     @Test
